@@ -1,13 +1,15 @@
 # GBP Location Sync — WordPress Plugin
 
-Syncs Google Business Profile (NAP, hours, reviews, temp closures) to a WordPress CPT `gbp_location` with ACF fields. GBP is the single source of truth.
+Syncs Google Business Profile (NAP, hours, reviews, temp closures) to a WordPress CPT `location` with ACF fields. GBP is the single source of truth. Cron-job.org with mu-plugins disabling wp cron. Still testing the cron process. We open new locations currently at a rate of 7x a year. So if a location is closed due to weather, instead of closing a location on multiple channels x number of times set temp closed on GMB and it will sync the hours accordingly. 
 
 ## Requirements
 
 - WordPress 6.0+
 - ACF Pro 6.0+
 - PHP 8.0+
-- Google Cloud project with **Business Profile API** and **My Business Account Management API** enabled
+- Serp API
+- GMB Profiles ClientID's
+- 
 
 ## Setup
 
