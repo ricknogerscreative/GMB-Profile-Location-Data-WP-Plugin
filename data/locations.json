@@ -1,0 +1,178 @@
+[
+  {
+    "name": "Emergency Dental of Las Vegas",
+    "city": "Las Vegas",
+    "state": "NV",
+    "address": "5890 South Durango Drive ste 105",
+    "place_id": "ChIJ3SkANWLByIARHQ9fYyIpfBU",
+    "data_id": "0x80c8c162350029dd:0x157c2922635f0f1d"
+  },
+  {
+    "name": "Emergency Dental of Salt Lake City",
+    "city": "Sandy",
+    "state": "UT",
+    "address": "7370 South Creek Road #104",
+    "place_id": "ChIJ7YhN1SmIUocRVI7gS2cNDs8",
+    "data_id": "0x87528829d54d88ed:0xcf0e0d674be08e54"
+  },
+  {
+    "name": "Emergency Dental of Jacksonville",
+    "city": "Jacksonville",
+    "state": "FL",
+    "address": "9770 Baymeadows Rd",
+    "place_id": "ChIJq3VsRfnL5YgRjddZ6iBEeXs",
+    "data_id": "0x88e5cbf9456c75ab:0x7b794420ea59d78d"
+  },
+  {
+    "name": "Emergency Dental of Virginia Beach",
+    "city": "Virginia Beach",
+    "state": "VA",
+    "address": "4667 Haygood Rd suite 501",
+    "place_id": "ChIJ_VpeO7KVuokR4rotPSg00X4",
+    "data_id": "0x89ba95b23b5e5afd:0x7ed134283d2dbae2"
+  },
+  {
+    "name": "Emergency Dental of Columbus",
+    "city": "Columbus",
+    "state": "OH",
+    "address": "4034 Morse Rd",
+    "place_id": "ChIJjbP3bkaLOIgRogWyav56NQA",
+    "data_id": "0x88388b466ef7b38d:0x357afe6ab205a2"
+  },
+  {
+    "name": "Emergency Dental of Cincinnati",
+    "city": "Cincinnati",
+    "state": "OH",
+    "address": "3349 Whitfield Ave",
+    "place_id": "ChIJT9DpBGm1QYgRxrw-qwqLNJI",
+    "data_id": "0x8841b56904e9d04f:0x92348b0aab3ebcc6"
+  },
+  {
+    "name": "Emergency Dental of Nashville",
+    "city": "Nashville",
+    "state": "TN",
+    "address": "15576 Old Hickory Blvd",
+    "place_id": "ChIJxd_kYOt7ZIgRGNSBfeDThYE",
+    "data_id": "0x88647beb60e4dfc5:0x8185d3e07d81d418"
+  },
+  {
+    "name": "Emergency Dental of Phoenix",
+    "city": "Scottsdale",
+    "state": "AZ",
+    "address": "4910 E Greenway Rd",
+    "place_id": "ChIJYQe4_bdzK4cRcSHwsegot3Y",
+    "data_id": "0x872b73b7fdb80761:0x76b728e8b1f02171"
+  },
+  {
+    "name": "Emergency Dental of Oklahoma City",
+    "city": "Oklahoma City",
+    "state": "OK",
+    "address": "930 SW 107th St ste 100",
+    "place_id": "ChIJ4WpQw88TsocR_CjYy0OW8Pk",
+    "data_id": "0x87b213cfc3506ae1:0xf9f09643cbd828fc"
+  },
+  {
+    "name": "Emergency Dental of Detroit",
+    "city": "Warren",
+    "state": "MI",
+    "address": "28755 Schoenherr",
+    "place_id": "ChIJdwlwpojbJIgRa6p3hOES0EY",
+    "data_id": "0x8824db88a6700977:0x46d012e18477aa6b"
+  },
+  {
+    "name": "Emergency Dental of Grand Rapids",
+    "city": "Grand Rapids",
+    "state": "MI",
+    "address": "847 Parchment Dr. SE",
+    "place_id": "ChIJX460TmGzGYgRfQ18xtI2kX8",
+    "data_id": "0x8819b3614eb48e5f:0x7f9136d2c67c0d7d"
+  },
+  {
+    "name": "Emergency Dental of Tulsa",
+    "city": "Tulsa",
+    "state": "OK",
+    "address": "4715 East 91st St, STE 110",
+    "place_id": "ChIJ5Xs4j12TtocRsd-L8-Hg2Wc",
+    "data_id": "0x87b6935d8f387be5:0x67d9e0e1f38bdfb1"
+  },
+  {
+    "name": "Emergency Dental of Milwaukee",
+    "city": "West Allis",
+    "state": "WI",
+    "address": "9305 W National Ave",
+    "place_id": "ChIJY8qZRroaBYgRpK2LB5YLSdg",
+    "data_id": "0x88051aba4699ca63:0xd8490b96078bada4"
+  },
+  {
+    "name": "Emergency Dental of Colorado Springs",
+    "city": "Colorado Springs",
+    "state": "CO",
+    "address": "5925 Lehman Drive #5",
+    "place_id": "ChIJU1jrRvtOE4cR96ljSZDplls",
+    "data_id": "0x87134efb46eb5853:0x5b96e9904963a9f7"
+  },
+  {
+    "name": "Emergency Dental of Sacramento",
+    "city": "Sacramento",
+    "state": "CA",
+    "address": "2650 21st Street ste 4",
+    "place_id": "ChIJDxLwcNHRmoARXdxcSlL_goI",
+    "data_id": "0x809ad1d170f0120f:0x8282ff524a5cdc5d"
+  },
+  {
+    "name": "Emergency Dental of Denver",
+    "city": "Denver",
+    "state": "CO",
+    "address": "4200 E 8th Ave #200",
+    "place_id": "ChIJCZO2gpl-bIcRtPmBMIHogs8",
+    "data_id": "0x876c7e9982b69309:0xcf82e8813081f9b4"
+  },
+  {
+    "name": "Emergency Dental of St. Louis",
+    "city": "St. Louis",
+    "state": "MO",
+    "address": "10000 Watson Rd Building",
+    "place_id": "ChIJH91sh-bP2IcRdBOV2_PYv0U",
+    "data_id": "0x87d8cfe6876cdd1f:0x45bfd8f3db951374"
+  },
+  {
+    "name": "Emergency Dental of Buffalo",
+    "city": "Clarence",
+    "state": "NY",
+    "address": "9515 Main St",
+    "place_id": "ChIJQVF64Cif04kRDgRAoK0opMw",
+    "data_id": "0x89d39f28e07a5141:0xcca428ada040040e"
+  },
+  {
+    "name": "Emergency Dental of Omaha",
+    "city": "Omaha",
+    "state": "NE",
+    "address": "11229 W Dodge Rd",
+    "place_id": "ChIJGXsAgpXyk4cRrkLDu0iw-cA",
+    "data_id": "0x8793f29582007b19:0xc0f9b048bbc342ae"
+  },
+  {
+    "name": "Emergency Dental of Cleveland",
+    "city": "Middleburg Heights",
+    "state": "OH",
+    "address": "6865 Pearl Rd",
+    "place_id": "ChIJ88QzzxjrMIgRfXQOaYYbauo",
+    "data_id": "0x8830eb18cf33c4f3:0xea6a1b86690e747d"
+  },
+  {
+    "name": "Emergency Dental of Kansas City",
+    "city": "Kansas City",
+    "state": "MO",
+    "address": "1050 W Blue Ridge Blvd",
+    "place_id": "ChIJQ7bCN0vpwIcRTsUU2qX3mjE",
+    "data_id": "0x87c0e94b37c2b643:0x319af7a5da14c54e"
+  },
+  {
+    "name": "Emergency Dental of Dayton",
+    "city": "Dayton",
+    "state": "OH",
+    "address": "30 W Rahn Rd",
+    "place_id": "ChIJN6acAYCPQIgRC-8gaPRxzvw",
+    "data_id": "0x88408f80019ca637:0xfcce71f46820ef0b"
+  }
+]

@@ -1,0 +1,102 @@
+/* GBP Location Sync — Admin Styles */
+
+.gbp-sync-wrap h1 { margin-bottom: 12px; }
+
+/* Status bar */
+.gbp-sync-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 16px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+.gbp-status { font-weight: 600; }
+.gbp-status.connected    { color: #00a32a; }
+.gbp-status.disconnected { color: #d63638; }
+
+/* Tabs */
+.gbp-tab-nav {
+    display: flex;
+    gap: 0;
+    margin: 0 0 0 0;
+    padding: 0;
+    border-bottom: 1px solid #c3c4c7;
+    list-style: none;
+}
+.gbp-tab-nav li { margin: 0; }
+.gbp-tab-nav a {
+    display: block;
+    padding: 8px 18px;
+    text-decoration: none;
+    color: #1d2327;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 3px 3px 0 0;
+    margin-bottom: -1px;
+    background: #f6f7f7;
+}
+.gbp-tab-nav a.active,
+.gbp-tab-nav a:hover {
+    background: #fff;
+    border-color: #c3c4c7;
+    color: #0073aa;
+}
+.gbp-tab {
+    display: none;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-top: none;
+    padding: 20px;
+}
+.gbp-tab.active { display: block; }
+
+/* Sync method badge */
+.gbp-sync-method-badge {
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+
+/* Sync actions */
+.gbp-sync-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.gbp-sync-actions .spinner { margin: 0; float: none; }
+#gbp-sync-result { flex: 1; }
+#gbp-sync-result .notice { margin: 0; }
+
+/* Locations table */
+.gbp-locations-table td { vertical-align: middle; }
+.gbp-locations-table code {
+    font-size: 11px;
+    word-break: break-all;
+    color: #555;
+}
+
+/* Status badges */
+.gbp-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+.gbp-badge-success { background: #d1fae5; color: #065f46; }
+.gbp-badge-warning { background: #fef3c7; color: #92400e; }
+.gbp-badge-error   { background: #fee2e2; color: #7f1d1d; }
+
+/* Button states */
+.gbp-sync-one-btn.gbp-done  { background: #00a32a; color: #fff; border-color: #00a32a; }
+.gbp-sync-one-btn.gbp-error { background: #d63638; color: #fff; border-color: #d63638; }
