@@ -1,40 +1,232 @@
-# Wordpress - ignore core, configuration, examples, uploads and logs.
-# https://github.com/github/gitignore/blob/main/WordPress.gitignore
+# ============================================================
+#  Google My Business to WordPress Sync — .gitignore
+# ============================================================
 
-# Core
-#
-# Note: if you want to stage/commit WP core files
-# you can delete this whole section/until Configuration.
-/wp-admin/
-/wp-content/index.php
-/wp-content/languages
-/wp-content/plugins/index.php
-/wp-content/themes/index.php
-/wp-includes/
-/index.php
-/license.txt
-/readme.html
-/wp-*.php
-/xmlrpc.php
 
-# Configuration
+# ---------------------------------------------------------------
+# WordPress Core
+# ---------------------------------------------------------------
+# Ignore WordPress itself if installed locally for development
+wordpress/
+wp-admin/
+wp-includes/
+
+# WordPress config (contains DB credentials)
 wp-config.php
 
-# Example themes
-/wp-content/themes/twenty*/
 
-# Example plugin
-/wp-content/plugins/hello.php
+# WordPress uploads directory
+wp-content/uploads/
 
-# Uploads
-/wp-content/uploads/
+# WordPress cache
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
 
-# Log files
+# WordPress debug log
+wp-content/debug.log
+debug.log
+
+
+# ---------------------------------------------------------------
+# Plugin-Specific
+# ---------------------------------------------------------------
+
+# GMB sync debug/runtime logs
 *.log
+logs/
+gmb-sync.log
+gmb-sync-debug.log
 
-# htaccess
-/.htaccess
+# OAuth tokens & credentials (NEVER commit these)
+.credentials
+credentials.json
+token.json
+oauth-token.json
+google-service-account.json
+*.key
+*.pem
+*.p12
+data/locations.json
 
+# Sync state cache files
+sync-state.json
+.sync-cache/
+
+
+# ---------------------------------------------------------------
+# PHP / Composer
+# ---------------------------------------------------------------
+vendor/
+composer.lock
+# Uncomment below if you want to track composer.lock (recommended for plugins)
+# !composer.lock
+
+# PHP CS Fixer cache
+.php-cs-fixer.cache
+.php_cs.cache
+
+# PHPUnit
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+coverage.xml
+
+# Psalm / PHPStan cache
+.psalm/
+.phpstan/
+phpstan.neon.dist
+
+
+# ---------------------------------------------------------------
+# Node / NPM / Frontend Assets
+# ---------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+# Uncomment if using Yarn
+# yarn.lock
+
+# Built/compiled assets (if building from source)
+assets/css/*.min.css
+assets/js/*.min.js
+assets/js/dist/
+assets/css/dist/
+
+# Source maps (optional — uncomment to exclude)
+# assets/js/*.map
+# assets/css/*.map
+
+
+# ---------------------------------------------------------------
+# Environment & Secrets
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+
+# Local config overrides
+config/local.php
+config/production.php
+local-config.php
+
+
+# ---------------------------------------------------------------
+# IDEs & Editors
+# ---------------------------------------------------------------
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json.example
+
+# JetBrains / PhpStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim / NeoVim
+*.swp
+*.swo
+*~
+.vim/
+Session.vim
+
+# Emacs
+\#*\#
+.\#*
+.emacs.desktop
+.emacs.desktop.lock
+
+
+# ---------------------------------------------------------------
+# Operating System
+# ---------------------------------------------------------------
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+
+# ---------------------------------------------------------------
+# Build & Distribution
+# ---------------------------------------------------------------
+
+# Distribution packages
+dist/
+build/
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# Release artifacts
+releases/
+*.pot.bak
+
+
+# ---------------------------------------------------------------
+# Testing
+# ---------------------------------------------------------------
+tests/bootstrap.php.bak
+.phpspec/
+spec/
+
+
+# ---------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------
+
+# Backup files
+*.bak
+*.backup
+*.orig
+*.tmp
+*.temp
+
+# Patch files
+*.patch
+*.diff
+
+# Archive files generated during plugin packaging
+/google-my-business-to-wordpress-sync.zip
 # All plugins
 #
 # Note: If you wish to whitelist plugins,
