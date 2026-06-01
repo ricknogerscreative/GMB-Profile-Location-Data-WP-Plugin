@@ -74,6 +74,19 @@
 							</p>
 						</td>
 					</tr>
+						<tr>
+						<th><label for="gbp_sync_brand_prefix">Brand Name Prefix</label></th>
+						<td>
+							<input type="text" id="gbp_sync_brand_prefix" name="gbp_sync_brand_prefix"
+								value="<?php echo esc_attr( get_option( 'gbp_sync_brand_prefix', '' ) ); ?>"
+								class="regular-text" placeholder="e.g. Emergency Dental of ">
+							<p class="description">
+								Stripped from the GBP name to set the CPT post title and slug.
+								"Emergency Dental of Milwaukee" → title: <strong>Milwaukee</strong>, slug: <code>milwaukee</code>.
+								Leave blank to use the full GBP name.
+							</p>
+						</td>
+					</tr>
 				</table>
 				<?php submit_button( 'Save Settings' ); ?>
 			</form>

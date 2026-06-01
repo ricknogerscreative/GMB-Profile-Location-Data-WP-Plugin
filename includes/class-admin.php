@@ -44,6 +44,7 @@ class GBP_Admin {
 			'gbp_sync_serpapi_key',
 			'gbp_sync_frequency',
 			'gbp_sync_maps_embed_key',
+			'gbp_sync_brand_prefix',
 		] as $option ) {
 			register_setting( 'gbp_sync_settings', $option, [ 'sanitize_callback' => 'sanitize_text_field' ] );
 		}
@@ -116,9 +117,11 @@ class GBP_Admin {
 			wp_send_json_error( 'Missing place_id or title.' );
 		}
 
-		$post_id = wp_insert_post( [
+		$short_title = gbp_derive_short_title( $title );
+		$post_id     = wp_insert_post( [
 			'post_type'   => GBP_SYNC_POST_TYPE,
-			'post_title'  => $title,
+			'post_title'  => $short_title,
+			'post_name'   => sanitize_title( $short_title ),
 			'post_status' => 'draft',
 		] );
 

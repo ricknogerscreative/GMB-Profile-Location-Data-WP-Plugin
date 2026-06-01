@@ -28,6 +28,21 @@ foreach ( [
 	require_once GBP_SYNC_DIR . 'includes/' . $file . '.php';
 }
 
+/**
+ * Strip configured brand prefix from a GBP title to produce a short location name.
+ * e.g. "Emergency Dental of Milwaukee" → "Milwaukee" when prefix = "Emergency Dental of "
+ */
+function gbp_derive_short_title( string $full_title ): string {
+	$prefix = trim( get_option( 'gbp_sync_brand_prefix', '' ) );
+	if ( ! $prefix ) {
+		return $full_title;
+	}
+	if ( stripos( $full_title, $prefix ) === 0 ) {
+		return trim( substr( $full_title, strlen( $prefix ) ) );
+	}
+	return $full_title;
+}
+
 function gbp_sync_boot(): void {
 	GBP_Location_CPT::instance();
 	GBP_Admin::instance();

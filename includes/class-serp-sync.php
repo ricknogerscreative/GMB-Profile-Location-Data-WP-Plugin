@@ -284,9 +284,16 @@ class GBP_Serp_Sync {
 		// Sync meta.
 		update_field( 'gbp_last_synced', current_time( 'Y-m-d H:i:s' ), $post_id );
 
-		// Keep post title in sync.
-		if ( ! empty( $place['title'] ) && get_the_title( $post_id ) !== $place['title'] ) {
-			wp_update_post( [ 'ID' => $post_id, 'post_title' => $place['title'] ] );
+		// Keep post title and slug in sync using short name (prefix stripped).
+		if ( ! empty( $place['title'] ) ) {
+			$short_title = gbp_derive_short_title( $place['title'] );
+			if ( get_the_title( $post_id ) !== $short_title ) {
+				wp_update_post( [
+					'ID'         => $post_id,
+					'post_title' => $short_title,
+					'post_name'  => sanitize_title( $short_title ),
+				] );
+			}
 		}
 	}
 
