@@ -75,6 +75,18 @@
 						</td>
 					</tr>
 						<tr>
+						<th><label for="gbp_sync_places_api_key">Places API Key <span style="font-weight:normal;color:#666">(hours fallback)</span></label></th>
+						<td>
+							<input type="password" id="gbp_sync_places_api_key" name="gbp_sync_places_api_key"
+								value="<?php echo esc_attr( get_option( 'gbp_sync_places_api_key', '' ) ); ?>"
+								class="regular-text" autocomplete="off">
+							<p class="description">
+								When SerpAPI returns no hours (GBP hours not on public Maps), the sync queries the authoritative <strong>Places API (New)</strong> for this place_id.
+								Google Cloud Console &rarr; enable "Places API (New)" + billing on the same project. Leave blank to reuse the Maps Embed key above.
+							</p>
+						</td>
+					</tr>
+						<tr>
 						<th><label for="gbp_sync_brand_prefix">Brand Name Prefix</label></th>
 						<td>
 							<input type="text" id="gbp_sync_brand_prefix" name="gbp_sync_brand_prefix"
@@ -103,6 +115,9 @@
 			<div class="gbp-sync-actions">
 				<button id="gbp-sync-all-btn" class="button button-primary" <?php echo ! $connected ? 'disabled' : ''; ?>>
 					Sync All Locations Now
+				</button>
+				<button id="gbp-sync-missing-hours-btn" class="button" <?php echo ! $connected ? 'disabled' : ''; ?>>
+					Re-sync Missing Hours
 				</button>
 				<span id="gbp-sync-spinner" class="spinner"></span>
 				<div id="gbp-sync-result"></div>

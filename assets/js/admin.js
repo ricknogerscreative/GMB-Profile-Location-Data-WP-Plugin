@@ -56,6 +56,57 @@
         });
     });
 
+    // Re-sync only locations missing hours.
+    $('#gbp-sync-missing-hours-btn').on('click', function () {
+        var $btn     = $(this);
+        var $spinner = $('#gbp-sync-spinner');
+        var $result  = $('#gbp-sync-result');
+
+        $btn.prop('disabled', true);
+        $spinner.addClass('is-active');
+        $result.html('<p>Re-scraping locations with no hours — this can take a while (each retries up to 3×).</p>');
+
+        $.post(gbpSync.ajaxUrl, {
+            action: 'gbp_sync_missing_hours',
+            nonce:  gbpSync.nonce,
+        })
+        .done(function (res) {
+            if (res.success) {
+                var d = res.data;
+                var stillHtml = '';
+                if (d.still_missing && d.still_missing.length) {
+                    stillHtml = '<p style="margin:6px 0 0">Still no hours (likely none set in Google Business Profile):</p>' +
+                        '<ul style="margin:4px 0 0 16px">' +
+                        d.still_missing.map(function(t){ return '<li>' + t + '</li>'; }).join('') +
+                        '</ul>';
+                }
+                var errHtml = '';
+                if (d.errors && d.errors.length) {
+                    errHtml = '<ul style="margin:4px 0 0 16px">' +
+                        d.errors.map(function(e){ return '<li>' + e + '</li>'; }).join('') +
+                        '</ul>';
+                }
+                var noticeType = (d.errors.length || (d.still_missing && d.still_missing.length)) ? 'warning' : 'success';
+                $result.html(
+                    '<div class="notice notice-' + noticeType + ' inline"><p>' +
+                    'Checked: <strong>' + d.checked + '</strong> | Recovered hours: <strong>' + d.recovered + '</strong>' +
+                    (d.errors.length ? ' | Errors: <strong>' + d.errors.length + '</strong>' : '') +
+                    '</p>' + stillHtml + errHtml + '</div>'
+                );
+                setTimeout(function () { location.reload(); }, 2500);
+            } else {
+                $result.html('<div class="notice notice-error inline"><p>Re-sync failed: ' + (res.data || 'Unknown error') + '</p></div>');
+            }
+        })
+        .fail(function () {
+            $result.html('<div class="notice notice-error inline"><p>Request failed. Check server logs.</p></div>');
+        })
+        .always(function () {
+            $btn.prop('disabled', false);
+            $spinner.removeClass('is-active');
+        });
+    });
+
     // Sync single location.
     $(document).on('click', '.gbp-sync-one-btn', function () {
         var $btn         = $(this);

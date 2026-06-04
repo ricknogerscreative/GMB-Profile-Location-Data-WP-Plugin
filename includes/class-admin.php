@@ -23,6 +23,7 @@ class GBP_Admin {
 		add_action( 'admin_init',            [ $this, 'register_settings' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'wp_ajax_gbp_sync_all',          [ $this, 'ajax_sync_all' ] );
+		add_action( 'wp_ajax_gbp_sync_missing_hours', [ $this, 'ajax_sync_missing_hours' ] );
 		add_action( 'wp_ajax_gbp_sync_one',          [ $this, 'ajax_sync_one' ] );
 		add_action( 'wp_ajax_gbp_search_locations',  [ $this, 'ajax_search_locations' ] );
 		add_action( 'wp_ajax_gbp_import_location',   [ $this, 'ajax_import_location' ] );
@@ -44,6 +45,7 @@ class GBP_Admin {
 			'gbp_sync_serpapi_key',
 			'gbp_sync_frequency',
 			'gbp_sync_maps_embed_key',
+			'gbp_sync_places_api_key',
 			'gbp_sync_brand_prefix',
 		] as $option ) {
 			register_setting( 'gbp_sync_settings', $option, [ 'sanitize_callback' => 'sanitize_text_field' ] );
@@ -72,6 +74,15 @@ class GBP_Admin {
 			wp_send_json_error( 'Unauthorized', 403 );
 		}
 		$results = ( new GBP_Serp_Sync() )->sync_all();
+		wp_send_json_success( $results );
+	}
+
+	public function ajax_sync_missing_hours(): void {
+		check_ajax_referer( self::NONCE, 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Unauthorized', 403 );
+		}
+		$results = ( new GBP_Serp_Sync() )->sync_missing_hours();
 		wp_send_json_success( $results );
 	}
 

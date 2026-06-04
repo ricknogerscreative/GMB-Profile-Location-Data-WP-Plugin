@@ -65,6 +65,55 @@ class GBP_Serp_Sync {
 	}
 
 	/**
+	 * Re-sync only locations whose loc_hours repeater is empty.
+	 *
+	 * Targets the slow-scrape locations that came back with no hours. The retry
+	 * loop in get_place() gives each a fresh shot at a complete scrape.
+	 */
+	public function sync_missing_hours(): array {
+		$results = [ 'synced' => 0, 'recovered' => 0, 'still_missing' => [], 'errors' => [], 'checked' => 0 ];
+
+		$posts = get_posts( [
+			'post_type'      => GBP_SYNC_POST_TYPE,
+			'posts_per_page' => -1,
+			'meta_query'     => [ [
+				'key'     => 'loc_place_id',
+				'value'   => '',
+				'compare' => '!=',
+			] ],
+		] );
+
+		foreach ( $posts as $post ) {
+			$hours = get_field( 'loc_hours', $post->ID );
+			if ( ! empty( $hours ) ) {
+				continue; // Already has hours — skip.
+			}
+
+			$results['checked']++;
+
+			$place_id = get_field( 'loc_place_id', $post->ID );
+			$err      = $this->sync_post( $post->ID, $place_id );
+
+			if ( $err ) {
+				$results['errors'][] = $post->post_title . ': ' . $err;
+				continue;
+			}
+
+			$results['synced']++;
+
+			// Did the re-sync actually populate hours?
+			if ( ! empty( get_field( 'loc_hours', $post->ID ) ) ) {
+				$results['recovered']++;
+			} else {
+				$results['still_missing'][] = $post->post_title;
+			}
+		}
+
+		update_option( 'gbp_sync_last_run', current_time( 'mysql' ) );
+		return $results;
+	}
+
+	/**
 	 * Compare data/locations.json against existing WP posts and return new vs. already-imported.
 	 */
 	public function search_chain_locations(): array {
@@ -161,9 +210,17 @@ class GBP_Serp_Sync {
 		}
 
 		// Store full response for admin debug view (5 min TTL).
+		error_log( 'GBP place_keys post_id=' . $post_id . ' keys=' . implode( ',', array_keys( $place ) ) );
+		error_log( 'GBP place_full post_id=' . $post_id . ' json=' . wp_json_encode( $place ) );
+		$ext = $place['extensions'] ?? [];
+		$hrs = $place['hours'] ?? $place['operating_hours'] ?? $ext['hours'] ?? $ext['operating_hours'] ?? 'NOT IN RESPONSE';
 		set_transient( 'gbp_serp_debug_' . $post_id, [
-			'hours'   => $place['hours'] ?? $place['operating_hours'] ?? 'NOT IN RESPONSE',
-			'keys'    => array_keys( $place ),
+			'hours'           => $hrs,
+			'hours_type'      => gettype( $hrs ),
+			'hours_json'      => wp_json_encode( $hrs ),
+			'extensions'      => $ext,
+			'extensions_keys' => is_array( $ext ) ? array_keys( $ext ) : 'not_array',
+			'keys'            => array_keys( $place ),
 		], 300 );
 
 		$this->map_to_acf( $post_id, $place );
@@ -174,29 +231,62 @@ class GBP_Serp_Sync {
 	// API
 	// -------------------------------------------------------------------------
 
+	/**
+	 * Number of times to re-request a place when the scrape returns no hours.
+	 *
+	 * Fresh SerpAPI scrapes (total_time_taken > ~2s) sometimes return the "lite"
+	 * Google Maps place panel with no `hours`/`open_state`. A retry usually lands
+	 * a complete scrape, which SerpAPI then caches (~1h) for fast future syncs.
+	 */
+	private const HOURS_RETRY_ATTEMPTS = 3;
+	private const HOURS_RETRY_DELAY_US = 1500000; // 1.5s between attempts.
+
 	private function get_place( string $place_id ): array {
 		$url = add_query_arg( [
 			'engine'   => 'google_maps',
+			'type'     => 'place',
 			'place_id' => $place_id,
 			'api_key'  => $this->api_key,
 		], self::API_URL );
 
-		$response = wp_remote_get( $url, [ 'timeout' => 30 ] );
+		$place = [];
 
-		if ( is_wp_error( $response ) ) {
-			error_log( 'GBP SerpSync error: ' . $response->get_error_message() );
-			return [];
+		for ( $attempt = 1; $attempt <= self::HOURS_RETRY_ATTEMPTS; $attempt++ ) {
+			$response = wp_remote_get( $url, [ 'timeout' => 30 ] );
+
+			if ( is_wp_error( $response ) ) {
+				error_log( 'GBP SerpSync error: ' . $response->get_error_message() );
+				return [];
+			}
+
+			$code = wp_remote_retrieve_response_code( $response );
+			$body = json_decode( wp_remote_retrieve_body( $response ), true ) ?? [];
+
+			if ( $code !== 200 ) {
+				error_log( 'GBP SerpSync HTTP ' . $code . ': ' . wp_json_encode( $body ) );
+				return [ 'error' => 'HTTP ' . $code . ' — ' . ( $body['error'] ?? 'Unknown' ) ];
+			}
+
+			$place = $body['place_results'] ?? [];
+
+			// Complete scrape — hours present. Done.
+			if ( isset( $place['hours'] ) || isset( $place['open_state'] ) ) {
+				if ( $attempt > 1 ) {
+					error_log( 'GBP SerpSync hours recovered for ' . $place_id . ' on attempt ' . $attempt );
+				}
+				return $place;
+			}
+
+			// No hours this pass — retry unless out of attempts.
+			if ( $attempt < self::HOURS_RETRY_ATTEMPTS ) {
+				error_log( 'GBP SerpSync no hours for ' . $place_id . ' (attempt ' . $attempt . '), retrying' );
+				usleep( self::HOURS_RETRY_DELAY_US );
+			} else {
+				error_log( 'GBP SerpSync no hours for ' . $place_id . ' after ' . self::HOURS_RETRY_ATTEMPTS . ' attempts — likely no hours configured in GBP' );
+			}
 		}
 
-		$code = wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true ) ?? [];
-
-		if ( $code !== 200 ) {
-			error_log( 'GBP SerpSync HTTP ' . $code . ': ' . wp_json_encode( $body ) );
-			return [ 'error' => 'HTTP ' . $code . ' — ' . ( $body['error'] ?? 'Unknown' ) ];
-		}
-
-		return $body['place_results'] ?? [];
+		return $place;
 	}
 
 	// -------------------------------------------------------------------------
@@ -253,24 +343,44 @@ class GBP_Serp_Sync {
 		update_field( 'loc_temp_closed', $temp_closed ? 1 : 0, $post_id );
 		update_field( 'loc_status', $temp_closed ? 'CLOSED_TEMPORARILY' : 'OPEN', $post_id );
 
-		// Hours — handle multiple SerpAPI response structures.
-		$hours_raw = $place['hours'] ?? $place['operating_hours'] ?? [];
-		if ( is_array( $hours_raw ) ) {
+		// Hours — check top-level first, then extensions (SerpAPI Google Maps buries hours there).
+		$ext       = $place['extensions'] ?? [];
+		$hours_raw = $place['hours'] ?? $place['operating_hours']
+			?? ( is_array( $ext ) ? ( $ext['hours'] ?? $ext['operating_hours'] ?? [] ) : [] );
+		error_log( 'GBP hours_raw post_id=' . $post_id . ' type=' . gettype( $hours_raw ) . ' value=' . wp_json_encode( $hours_raw ) );
+		error_log( 'GBP extensions post_id=' . $post_id . ' keys=' . ( is_array( $ext ) ? implode( ',', array_keys( $ext ) ) : 'not_array' ) . ' value=' . wp_json_encode( $ext ) );
+		$hours_mapped = false;
+		if ( is_array( $hours_raw ) && ! empty( $hours_raw ) ) {
 			$first     = reset( $hours_raw );
 			$timetable = $hours_raw['timetable'] ?? null;
 			if ( $timetable ) {
 				// Structure A: hours.timetable.{day} = [{open,close}]
 				$this->map_hours( $post_id, $timetable );
+				$hours_mapped = true;
 			} elseif ( isset( $hours_raw['monday'] ) || isset( $hours_raw['sunday'] ) ) {
 				// Structure B: hours.{day} directly
 				$this->map_hours( $post_id, $hours_raw );
+				$hours_mapped = true;
 			} elseif ( is_array( $first ) && ! empty( $first ) ) {
 				// Structure C (actual SerpAPI): [{sunday:"9 AM–9 PM"},{monday:"10 AM–8 PM"},...]
 				$this->map_hours_from_keyed_objects( $post_id, $hours_raw );
+				$hours_mapped = true;
 			} elseif ( is_string( $first ) ) {
 				// Structure D: ["Monday: 8am-6pm", ...]
 				$this->map_hours_from_strings( $post_id, $hours_raw );
+				$hours_mapped = true;
+			} else {
+				error_log( 'GBP hours_raw unrecognized structure post_id=' . $post_id . ' first_type=' . gettype( $first ) . ' first_keys=' . ( is_array( $first ) ? implode( ',', array_keys( $first ) ) : 'n/a' ) );
 			}
+		} elseif ( is_string( $hours_raw ) && $hours_raw !== '' ) {
+			// Fallback: single string like "Mon-Fri: 9AM-5PM"
+			error_log( 'GBP hours_raw is string post_id=' . $post_id . ': ' . $hours_raw );
+		}
+
+		// SerpAPI returned no usable hours (common when GBP hours aren't on the
+		// public Maps listing). Fall back to the authoritative Google Places API.
+		if ( ! $hours_mapped && $pid ) {
+			$this->map_hours_from_places_api( $post_id, $pid );
 		}
 
 		// Reviews.
@@ -374,8 +484,8 @@ class GBP_Serp_Sync {
 					// Format: {"open": "8:00 AM", "close": "6:00 PM"}
 					$rows[] = [
 						'day'        => $acf_day,
-						'open_time'  => $period['open']  ?? $period['opens']  ?? '',
-						'close_time' => $period['close'] ?? $period['closes'] ?? '',
+						'open_time'  => $this->normalize_time( (string) ( $period['open']  ?? $period['opens']  ?? '' ) ),
+						'close_time' => $this->normalize_time( (string) ( $period['close'] ?? $period['closes'] ?? '' ) ),
 						'is_closed'  => 0,
 					];
 				} elseif ( is_string( $period ) ) {
@@ -473,8 +583,131 @@ class GBP_Serp_Sync {
 	 * /u flag required — en-dash is U+2013 (multi-byte UTF-8); without it the byte
 	 * split leaves garbage in the close side and ACF saves an empty string.
 	 */
+	/**
+	 * Authoritative hours fallback via Google Places API (New).
+	 *
+	 * SerpAPI scrapes the public Maps listing; some GBP hours never surface there.
+	 * Places API reads Google's real data for the same place_id. Returns true if
+	 * hours were written to loc_hours.
+	 *
+	 * Requires "Places API (New)" enabled + billing on the Google Cloud project.
+	 * Uses gbp_sync_places_api_key, falling back to the Maps embed key.
+	 */
+	private function map_hours_from_places_api( int $post_id, string $place_id ): bool {
+		$key = get_option( 'gbp_sync_places_api_key', '' );
+		if ( ! $key ) {
+			$key = get_option( 'gbp_sync_maps_embed_key', '' );
+		}
+		if ( ! $key ) {
+			error_log( 'GBP Places API skipped (no key) post_id=' . $post_id );
+			return false;
+		}
+
+		$url      = 'https://places.googleapis.com/v1/places/' . rawurlencode( $place_id );
+		$response = wp_remote_get( $url, [
+			'timeout' => 20,
+			'headers' => [
+				'X-Goog-Api-Key'   => $key,
+				'X-Goog-FieldMask' => 'regularOpeningHours',
+			],
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			error_log( 'GBP Places API error post_id=' . $post_id . ': ' . $response->get_error_message() );
+			return false;
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true ) ?? [];
+
+		if ( $code !== 200 ) {
+			error_log( 'GBP Places API HTTP ' . $code . ' post_id=' . $post_id . ': ' . wp_json_encode( $body['error'] ?? $body ) );
+			return false;
+		}
+
+		$periods = $body['regularOpeningHours']['periods'] ?? [];
+		if ( empty( $periods ) ) {
+			error_log( 'GBP Places API returned no periods post_id=' . $post_id . ' place_id=' . $place_id );
+			return false;
+		}
+
+		return $this->map_hours_from_places_periods( $post_id, $periods );
+	}
+
+	/**
+	 * Map Places API regularOpeningHours.periods to the ACF loc_hours repeater.
+	 *
+	 * Each period: {open:{day,hour,minute}, close:{day,hour,minute}}. day is
+	 * 0=Sunday..6=Saturday. A 24-hour day has open with no close. Days absent
+	 * from periods are closed.
+	 */
+	private function map_hours_from_places_periods( int $post_id, array $periods ): bool {
+		$day_label = [ 0 => 'SUNDAY', 1 => 'MONDAY', 2 => 'TUESDAY', 3 => 'WEDNESDAY', 4 => 'THURSDAY', 5 => 'FRIDAY', 6 => 'SATURDAY' ];
+		$order     = [ 1, 2, 3, 4, 5, 6, 0 ]; // Monday-first, matching SerpAPI mapping.
+
+		$by_day = [];
+		foreach ( $periods as $p ) {
+			$od = $p['open']['day'] ?? null;
+			if ( $od === null ) {
+				continue;
+			}
+			$open = $this->fmt_clock( (int) ( $p['open']['hour'] ?? 0 ), (int) ( $p['open']['minute'] ?? 0 ) );
+
+			if ( ! isset( $p['close'] ) ) {
+				// Open 24 hours.
+				$by_day[ $od ][] = [ 'open' => $open, 'close' => $this->fmt_clock( 23, 59 ) ];
+				continue;
+			}
+			$close            = $this->fmt_clock( (int) ( $p['close']['hour'] ?? 0 ), (int) ( $p['close']['minute'] ?? 0 ) );
+			$by_day[ $od ][] = [ 'open' => $open, 'close' => $close ];
+		}
+
+		$rows = [];
+		foreach ( $order as $d ) {
+			$label = $day_label[ $d ];
+			if ( empty( $by_day[ $d ] ) ) {
+				$rows[] = [ 'day' => $label, 'open_time' => '', 'close_time' => '', 'is_closed' => 1 ];
+				continue;
+			}
+			foreach ( $by_day[ $d ] as $pr ) {
+				$rows[] = [ 'day' => $label, 'open_time' => $pr['open'], 'close_time' => $pr['close'], 'is_closed' => 0 ];
+			}
+		}
+
+		update_field( 'loc_hours', $rows, $post_id );
+		error_log( 'GBP Places API hours mapped post_id=' . $post_id . ' rows=' . count( $rows ) );
+		return true;
+	}
+
+	/**
+	 * Format an hour/minute pair to ACF's "g:i A" (e.g. 11,0 → "11:00 AM").
+	 */
+	private function fmt_clock( int $hour, int $minute ): string {
+		return date( 'g:i A', mktime( $hour, $minute, 0, 1, 1, 2000 ) );
+	}
+
 	private function split_time_range( string $range ): array {
 		$parts = preg_split( '/\s*[–—\-]\s*/u', $range, 2 );
-		return [ trim( $parts[0] ?? '' ), trim( $parts[1] ?? '' ) ];
+		return [
+			$this->normalize_time( trim( $parts[0] ?? '' ) ),
+			$this->normalize_time( trim( $parts[1] ?? '' ) ),
+		];
+	}
+
+	/**
+	 * Normalize a time token to ACF's "g:i A" format (e.g. "11 AM" → "11:00 AM").
+	 *
+	 * SerpAPI drops the minutes on round hours ("11 AM", "9 PM"); ACF time pickers
+	 * store/display "g:i A", so the missing ":00" renders inconsistently. Returns
+	 * the original string unchanged if it can't be parsed.
+	 */
+	private function normalize_time( string $time ): string {
+		if ( $time === '' ) {
+			return '';
+		}
+		// Normalize unicode spaces (incl. non-breaking) so strtotime parses cleanly.
+		$clean = trim( preg_replace( '/\s+/u', ' ', $time ) );
+		$ts    = strtotime( $clean );
+		return $ts !== false ? date( 'g:i A', $ts ) : $time;
 	}
 }
