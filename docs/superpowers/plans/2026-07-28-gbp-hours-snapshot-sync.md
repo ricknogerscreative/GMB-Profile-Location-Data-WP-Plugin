@@ -96,7 +96,7 @@ git commit -m "docs: record verified Places API response shape"
   - `GBP_Hours_Rules::fmt_clock( int $hour, int $minute ): string`
   - `GBP_Hours_Rules::normalize_time( string $time ): string`
   - `GBP_Hours_Rules::split_time_range( string $range ): array` — returns `[ open, close ]`
-  - Test functions `describe()`, `it()`, `expect_equals()`, `expect_null()`, `expect_true()`
+  - Test functions `describe()`, `it()`, `expect_equals()`, `expect_null()`
 
 - [ ] **Step 1: Write the test harness**
 
@@ -144,12 +144,6 @@ function expect_equals( $expected, $actual, string $msg = '' ): void {
 function expect_null( $actual, string $msg = '' ): void {
 	if ( null !== $actual ) {
 		throw new Exception( ( $msg ? $msg . ': ' : '' ) . 'expected null, got ' . var_export( $actual, true ) );
-	}
-}
-
-function expect_true( $actual, string $msg = '' ): void {
-	if ( true !== $actual ) {
-		throw new Exception( ( $msg ? $msg . ': ' : '' ) . 'expected true, got ' . var_export( $actual, true ) );
 	}
 }
 
@@ -1038,7 +1032,9 @@ Built before `derive_special()` because it is independent of the Task 1 date-sha
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `GBP_Hours_Rules::merge_special_window( array $existing, array $derived, string $today, string $window_end ): array`
+- Produces: `GBP_Hours_Rules::merge_special_window( array $existing, array $derived, string $window_end ): array`
+
+Note there is no `$today` parameter. Rows dated before today and rows inside the window are both dropped, and `window_end` is always the later of the two bounds, so a single `<=` comparison expresses the whole rule. Taking `$today` as well would leave a redundant condition and an argument that changes nothing.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1053,30 +1049,28 @@ function special_row( string $date, int $closed = 1 ): array {
 
 describe( 'merge_special_window', function () {
 
-	$today = '2026-11-23';
-	$end   = '2026-11-29';
+	// Window runs 2026-11-23 (a Monday) through 2026-11-29.
+	$end = '2026-11-29';
 
-	it( 'drops rows dated before today', function () use ( $today, $end ) {
-		$out = GBP_Hours_Rules::merge_special_window( [ special_row( '2026-11-20' ) ], [], $today, $end );
+	it( 'drops rows dated before the window', function () use ( $end ) {
+		$out = GBP_Hours_Rules::merge_special_window( [ special_row( '2026-11-20' ) ], [], $end );
 		expect_equals( [], $out );
 	} );
 
-	it( 'replaces existing rows that fall inside the window', function () use ( $today, $end ) {
+	it( 'replaces existing rows that fall inside the window', function () use ( $end ) {
 		$out = GBP_Hours_Rules::merge_special_window(
 			[ special_row( '2026-11-26', 0 ) ],
 			[ special_row( '2026-11-26', 1 ) ],
-			$today,
 			$end
 		);
 		expect_equals( 1, count( $out ) );
 		expect_equals( 1, $out[0]['is_closed'] );
 	} );
 
-	it( 'preserves a hand-entered row dated beyond the window', function () use ( $today, $end ) {
+	it( 'preserves a hand-entered row dated beyond the window', function () use ( $end ) {
 		$out = GBP_Hours_Rules::merge_special_window(
 			[ special_row( '2026-12-25' ) ],
 			[ special_row( '2026-11-26' ) ],
-			$today,
 			$end
 		);
 		expect_equals( 2, count( $out ) );
@@ -1084,41 +1078,39 @@ describe( 'merge_special_window', function () {
 		expect_equals( '2026-12-25', $out[1]['date'] );
 	} );
 
-	it( 'keeps a row dated exactly at the window end out of the preserved set', function () use ( $today, $end ) {
-		$out = GBP_Hours_Rules::merge_special_window( [ special_row( '2026-11-29' ) ], [], $today, $end );
+	it( 'drops a row dated exactly at the window end', function () use ( $end ) {
+		$out = GBP_Hours_Rules::merge_special_window( [ special_row( '2026-11-29' ) ], [], $end );
 		expect_equals( [], $out );
 	} );
 
-	it( 'keeps a row dated exactly today out of the preserved set', function () use ( $today, $end ) {
-		$out = GBP_Hours_Rules::merge_special_window( [ special_row( '2026-11-23' ) ], [], $today, $end );
-		expect_equals( [], $out );
+	it( 'keeps the first row past the window end', function () use ( $end ) {
+		$out = GBP_Hours_Rules::merge_special_window( [ special_row( '2026-11-30' ) ], [], $end );
+		expect_equals( 1, count( $out ) );
+		expect_equals( '2026-11-30', $out[0]['date'] );
 	} );
 
-	it( 'sorts the merged result by date', function () use ( $today, $end ) {
+	it( 'sorts the merged result by date', function () use ( $end ) {
 		$out = GBP_Hours_Rules::merge_special_window(
 			[ special_row( '2027-01-01' ), special_row( '2026-12-25' ) ],
 			[ special_row( '2026-11-26' ) ],
-			$today,
 			$end
 		);
 		expect_equals( [ '2026-11-26', '2026-12-25', '2027-01-01' ], array_column( $out, 'date' ) );
 	} );
 
-	it( 'drops rows with a missing or empty date', function () use ( $today, $end ) {
+	it( 'drops rows with a missing or empty date', function () use ( $end ) {
 		$out = GBP_Hours_Rules::merge_special_window(
 			[ [ 'is_closed' => 1 ], special_row( '' ) ],
 			[],
-			$today,
 			$end
 		);
 		expect_equals( [], $out );
 	} );
 
-	it( 'reindexes the returned array', function () use ( $today, $end ) {
+	it( 'reindexes the returned array', function () use ( $end ) {
 		$out = GBP_Hours_Rules::merge_special_window(
 			[ special_row( '2026-11-20' ), special_row( '2026-12-25' ) ],
 			[],
-			$today,
 			$end
 		);
 		expect_equals( [ 0 ], array_keys( $out ) );
@@ -1143,20 +1135,20 @@ Add to `GBP_Hours_Rules`:
 	/**
 	 * Fold derived special hours into the existing set, scoped to a date window.
 	 *
-	 * Only rows inside [ today, window_end ] are replaced by derived rows. Rows
-	 * dated beyond the window are hand-entered future closures and are kept
-	 * verbatim; rows dated in the past are dropped. Scoping by date is what
-	 * removes the need for a "source" sub-field on the repeater.
+	 * Rows dated beyond window_end are hand-entered future closures and are kept
+	 * verbatim. Everything at or before it is dropped — either it is in the past,
+	 * or it sits inside the window the derived rows now own. Scoping by date is
+	 * what removes the need for a "source" sub-field on the repeater.
 	 *
 	 * All dates are Y-m-d, so plain string comparison orders them correctly.
 	 */
-	public static function merge_special_window( array $existing, array $derived, string $today, string $window_end ): array {
+	public static function merge_special_window( array $existing, array $derived, string $window_end ): array {
 		$kept = [];
 
 		foreach ( $existing as $row ) {
 			$date = (string) ( $row['date'] ?? '' );
 
-			if ( '' === $date || $date < $today || $date <= $window_end ) {
+			if ( '' === $date || $date <= $window_end ) {
 				// Malformed, past, or inside the derived window.
 				continue;
 			}
@@ -1716,7 +1708,7 @@ class GBP_Hours_Sync {
 		);
 
 		if ( GBP_Hours_Rules::POPULATE === $action || GBP_Hours_Rules::WRITE === $action ) {
-			$merged = GBP_Hours_Rules::merge_special_window( $current, $derived, $today, $window_end );
+			$merged = GBP_Hours_Rules::merge_special_window( $current, $derived, $window_end );
 			update_field( 'loc_special_hours', $merged, $post_id );
 		}
 
