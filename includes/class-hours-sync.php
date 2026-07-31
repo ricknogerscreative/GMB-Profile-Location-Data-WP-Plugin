@@ -116,12 +116,13 @@ class GBP_Hours_Sync {
 		$this->last_error = null;
 
 		$result = [
-			'post_id' => $post_id,
-			'title'   => get_the_title( $post_id ),
-			'hours'   => GBP_Hours_Rules::SKIP,
-			'special' => GBP_Hours_Rules::SKIP,
-			'source'  => null,
-			'error'   => null,
+			'post_id'       => $post_id,
+			'title'         => get_the_title( $post_id ),
+			'hours'         => GBP_Hours_Rules::SKIP,
+			'special'       => GBP_Hours_Rules::SKIP,
+			'source'        => null,
+			'status_source' => null,
+			'error'         => null,
 		];
 
 		$place_id = get_field( 'loc_place_id', $post_id );
@@ -135,6 +136,7 @@ class GBP_Hours_Sync {
 
 		if ( null !== $places ) {
 			$this->write_status( $post_id, $places['status'] );
+			$result['status_source'] = 'places';
 			$regular = GBP_Hours_Rules::canonicalize_places( $places['regular_periods'] );
 			if ( null !== $regular ) {
 				$result['source'] = 'places';

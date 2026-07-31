@@ -260,10 +260,10 @@ class GBP_Serp_Sync {
 
 		$hours_result = ( new GBP_Hours_Sync() )->sync_location( $post_id, $hours_raw );
 
-		// Places API owns status when it answered. When it did not, fall back to
-		// what SerpAPI reported so a Places outage cannot leave a closed location
-		// showing as open.
-		if ( 'places' !== $hours_result['source'] ) {
+		// Places API owns status when it answered, regardless of whether its hours
+		// parsed. When Places did not answer at all, fall back to what SerpAPI
+		// reported so a Places outage cannot leave a closed location showing as open.
+		if ( 'places' !== $hours_result['status_source'] ) {
 			$temp_closed = (bool) ( $place['temporarily_closed'] ?? false );
 			if ( ! $temp_closed && isset( $place['open_state'] ) ) {
 				$temp_closed = false !== stripos( $place['open_state'], 'temporarily' );
