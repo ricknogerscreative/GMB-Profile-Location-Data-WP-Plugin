@@ -19,6 +19,17 @@ final class GBP_Hours_Rules {
 	 */
 	private const SPACE = '[\s\x{00A0}\x{202F}]';
 
+	/** Places API day index (0=Sunday) to canonical label. */
+	private const PLACES_DAY = [
+		0 => 'SUNDAY',
+		1 => 'MONDAY',
+		2 => 'TUESDAY',
+		3 => 'WEDNESDAY',
+		4 => 'THURSDAY',
+		5 => 'FRIDAY',
+		6 => 'SATURDAY',
+	];
+
 	/**
 	 * Format an hour/minute pair as "g:i A".
 	 *
@@ -60,5 +71,61 @@ final class GBP_Hours_Rules {
 			self::normalize_time( trim( $parts[0] ?? '' ) ),
 			self::normalize_time( trim( $parts[1] ?? '' ) ),
 		];
+	}
+
+	/**
+	 * Convert Places API regularOpeningHours.periods to canonical rows.
+	 *
+	 * A period is anchored to its opening day, so an overnight close lands on
+	 * the day the location opened. A weekday absent from the response is closed
+	 * — that is Google's own semantics and is authoritative. Returns null when
+	 * the input yields no usable period.
+	 */
+	public static function canonicalize_places( array $periods ): ?array {
+		if ( empty( $periods ) ) {
+			return null;
+		}
+
+		$by_day = [];
+		foreach ( $periods as $p ) {
+			$day = $p['open']['day'] ?? null;
+			if ( null === $day || ! isset( self::PLACES_DAY[ $day ] ) ) {
+				continue;
+			}
+
+			$open = self::fmt_clock( (int) ( $p['open']['hour'] ?? 0 ), (int) ( $p['open']['minute'] ?? 0 ) );
+
+			// A period with an open and no close is Google's "open 24 hours".
+			$close = isset( $p['close'] )
+				? self::fmt_clock( (int) ( $p['close']['hour'] ?? 0 ), (int) ( $p['close']['minute'] ?? 0 ) )
+				: self::fmt_clock( 23, 59 );
+
+			$by_day[ self::PLACES_DAY[ $day ] ][] = [ 'open' => $open, 'close' => $close ];
+		}
+
+		return empty( $by_day ) ? null : self::build_rows( $by_day );
+	}
+
+	/**
+	 * Expand a [ DAY => [ {open,close}, … ] ] map into canonical rows in fixed
+	 * Monday-first order, emitting a closed row for any day with no periods.
+	 */
+	private static function build_rows( array $by_day ): array {
+		$rows = [];
+		foreach ( self::DAYS as $label ) {
+			if ( empty( $by_day[ $label ] ) ) {
+				$rows[] = [ 'day' => $label, 'open_time' => '', 'close_time' => '', 'is_closed' => 1 ];
+				continue;
+			}
+			foreach ( $by_day[ $label ] as $period ) {
+				$rows[] = [
+					'day'        => $label,
+					'open_time'  => $period['open'],
+					'close_time' => $period['close'],
+					'is_closed'  => 0,
+				];
+			}
+		}
+		return $rows;
 	}
 }
