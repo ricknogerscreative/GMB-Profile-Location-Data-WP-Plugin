@@ -1466,7 +1466,10 @@ Per-location result shape, relied on by Tasks 9 and 11:
     'title'   => 'Milwaukee',
     'hours'   => 'write',      // populate|adopt|write|unchanged|skip|error
     'special' => 'unchanged',
-    'source'  => 'places',     // places|serpapi|null
+    'source'  => 'places',     // places|serpapi|null — where the HOURS came from
+    'status_source' => 'places', // places|null — set as soon as Places answers,
+                                 // independent of whether hours parsed. Task 9's
+                                 // status fallback gates on this, not on source.
     'error'   => null,
 ]
 ```
@@ -1615,7 +1618,8 @@ class GBP_Hours_Sync {
 			'title'   => get_the_title( $post_id ),
 			'hours'   => GBP_Hours_Rules::SKIP,
 			'special' => GBP_Hours_Rules::SKIP,
-			'source'  => null,
+			'source'        => null,
+			'status_source' => null,
 			'error'   => null,
 		];
 
@@ -1630,6 +1634,13 @@ class GBP_Hours_Sync {
 
 		if ( null !== $places ) {
 			$this->write_status( $post_id, $places['status'] );
+
+			// Recorded as soon as Places answers, whether or not the hours parsed.
+			// businessStatus was written either way, and Task 9's SerpAPI status
+			// fallback must not fire when it was — a temporarily closed location
+			// can legitimately return no regularOpeningHours.periods at all.
+			$result['status_source'] = 'places';
+
 			$regular = GBP_Hours_Rules::canonicalize_places( $places['regular_periods'] );
 			if ( null !== $regular ) {
 				$result['source'] = 'places';
@@ -1881,10 +1892,13 @@ Delete lines 337-384 (everything from the `// Status — temp closure is the key
 
 		$hours_result = ( new GBP_Hours_Sync() )->sync_location( $post_id, $hours_raw );
 
-		// Places API owns status when it answered. When it did not, fall back to
-		// what SerpAPI reported so a Places outage cannot leave a closed location
-		// showing as open.
-		if ( 'places' !== $hours_result['source'] ) {
+		// Places API owns status whenever it answered — gate on status_source, not
+		// source. GBP_Hours_Sync writes businessStatus as soon as Places responds,
+		// but only reports source === 'places' when the hours also parsed. A
+		// temporarily closed location can legitimately return an empty
+		// regularOpeningHours.periods, and gating on source would then let this
+		// fallback overwrite a correct CLOSED_TEMPORARILY with OPEN.
+		if ( 'places' !== $hours_result['status_source'] ) {
 			$temp_closed = (bool) ( $place['temporarily_closed'] ?? false );
 			if ( ! $temp_closed && isset( $place['open_state'] ) ) {
 				$temp_closed = false !== stripos( $place['open_state'], 'temporarily' );
