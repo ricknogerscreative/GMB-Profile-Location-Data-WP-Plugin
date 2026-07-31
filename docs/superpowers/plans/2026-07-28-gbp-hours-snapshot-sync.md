@@ -31,9 +31,13 @@
 
 ---
 
-### Task 1: Verify the Places API response shape
+### Task 1: Verify the Places API response shape — DEFERRED to Task 12
 
-This is a gate. The special-hours derivation in Task 7 assumes `currentOpeningHours.periods[].open.date` returns a `{year, month, day}` object. If Google does not return dates there, Task 7 needs a different date anchor and this plan must be revised before that task starts. Running this first also confirms the `regularOpeningHours.periods` shape that Task 3 depends on.
+**Status: deferred by the project owner.** The live probe will be run once the plugin is built, zipped and re-uploaded, as part of the Task 12 end-to-end verification. Task 7 is no longer gated on it and proceeds on the documented assumption.
+
+Because the assumption is now unverified at build time, Task 7 carries a fail-safe guard: if `currentOpeningHours` returns periods but none of them yield a date, `derive_special()` returns an empty set rather than reading every day as closed. Without that guard a wrong assumption would not fail quietly — it would write a full week of fabricated closures into `loc_special_hours`. The guard is specified and tested in Task 7 and re-checked in Task 12 Step 8.
+
+The probe itself is retained below for reference and is executed as Task 12 Step 0.
 
 **Files:**
 - Create: `/private/tmp/claude-501/.../scratchpad/probe-places.sh` (throwaway — do not commit)
@@ -1183,7 +1187,11 @@ git commit -m "feat: window-scoped merge for derived special hours"
 
 ### Task 7: `derive_special()`
 
-**Gate:** do not start until Task 1 confirmed that `currentOpeningHours.periods[].open.date` returns a `{year, month, day}` object. If it does not, stop and report — this task needs redesigning.
+**Assumption, unverified at build time:** `currentOpeningHours.periods[].open.date` returns a `{year, month, day}` object. The live probe that would have confirmed this was deferred to Task 12 by the project owner.
+
+Because of that, this task carries a **fail-safe guard**: when `$current_periods` is non-empty but no period yields a date, `derive_special()` returns `[]`. Without it, a wrong assumption would leave `$actual_by_date` empty, every one of the seven days would read as `CLOSED` against open regular hours, and the function would emit a full week of fabricated closures into `loc_special_hours`. Silence is the correct failure mode here; inventing closures is not.
+
+Note the guard deliberately triggers only on *non-empty* input. A genuinely closed-all-week location returns zero periods from Google, and `GBP_Hours_Sync::apply_special()` does not call this function at all in that case.
 
 **Files:**
 - Modify: `includes/class-hours-rules.php`
@@ -1281,6 +1289,15 @@ describe( 'derive_special', function () {
 		expect_equals( [], $out );
 	} );
 
+	it( 'returns nothing when periods carry no dates at all', function () use ( $today ) {
+		// The date assumption failing must not fabricate a week of closures.
+		$dateless = [
+			[ 'open' => [ 'day' => 1, 'hour' => 8, 'minute' => 0 ], 'close' => [ 'day' => 1, 'hour' => 18, 'minute' => 0 ] ],
+			[ 'open' => [ 'day' => 2, 'hour' => 8, 'minute' => 0 ], 'close' => [ 'day' => 2, 'hour' => 18, 'minute' => 0 ] ],
+		];
+		expect_equals( [], GBP_Hours_Rules::derive_special( regular_all_open(), $dateless, $today ) );
+	} );
+
 	it( 'treats a 24-hour period as open until 11:59 PM', function () use ( $today ) {
 		$periods    = current_standard_week( $today );
 		$periods[1] = [
@@ -1301,7 +1318,7 @@ PHP="$HOME/Library/Application Support/Local/lightning-services/php-8.2.29+0/bin
 "$PHP" tests/run-tests.php
 ```
 
-Expected: 7 failures, `Call to undefined method GBP_Hours_Rules::derive_special()`.
+Expected: 8 failures, `Call to undefined method GBP_Hours_Rules::derive_special()`.
 
 - [ ] **Step 3: Write the implementation**
 
@@ -1356,6 +1373,14 @@ Add to `GBP_Hours_Rules`:
 			$actual_by_date[ $date ][] = $open . '|' . $close;
 		}
 
+		// Fail-safe. Google gave us periods but none carried a date, so the
+		// date-shape assumption this function rests on is wrong. Every day would
+		// otherwise read as closed and we would write a week of closures that do
+		// not exist. Emit nothing instead.
+		if ( ! empty( $current_periods ) && empty( $actual_by_date ) ) {
+			return [];
+		}
+
 		$rows = [];
 
 		for ( $offset = 0; $offset < 7; $offset++ ) {
@@ -1407,7 +1432,7 @@ PHP="$HOME/Library/Application Support/Local/lightning-services/php-8.2.29+0/bin
 "$PHP" tests/run-tests.php
 ```
 
-Expected: `59 passed, 0 failed`.
+Expected: `60 passed, 0 failed`.
 
 - [ ] **Step 5: Commit**
 
@@ -1817,7 +1842,7 @@ PHP="$HOME/Library/Application Support/Local/lightning-services/php-8.2.29+0/bin
 "$PHP" tests/run-tests.php
 ```
 
-Expected: `59 passed, 0 failed`.
+Expected: `60 passed, 0 failed`.
 
 - [ ] **Step 4: Commit**
 
@@ -2344,7 +2369,53 @@ bare count. Drops the sync frequency setting — syncing is manual."
 
 `GBP_Hours_Sync` does HTTP and database work and has no unit tests. This task is its test.
 
-**Files:** none — verification only.
+The project owner runs this task against a packaged build: the plugin is zipped and re-uploaded to the site, then exercised through the admin UI. Steps 0a and 0b are theirs to run — everything from Step 1 on is checked against the uploaded build.
+
+**Files:** none — verification only, apart from the build artifact.
+
+- [ ] **Step 0a: Package the plugin**
+
+Build a clean zip containing only what ships — no tests, no docs, no SDD workspace, no VCS metadata:
+
+```bash
+rm -rf /tmp/gbp-build && mkdir -p /tmp/gbp-build/gbp-location-sync
+rsync -a --exclude='.git' --exclude='.superpowers' --exclude='docs' \
+      --exclude='tests' --exclude='.DS_Store' --exclude='*.zip' \
+      ./ /tmp/gbp-build/gbp-location-sync/
+( cd /tmp/gbp-build && zip -rq gbp-location-sync.zip gbp-location-sync )
+echo "built: /tmp/gbp-build/gbp-location-sync.zip"
+unzip -l /tmp/gbp-build/gbp-location-sync.zip | tail -5
+```
+
+Confirm the listing contains `includes/class-hours-rules.php` and `includes/class-hours-sync.php`, and does **not** contain `includes/class-cron.php`, `includes/class-sync-manager.php`, or `includes/class-gbp-api.php`.
+
+- [ ] **Step 0b: Run the deferred Places API probe**
+
+This is the Task 1 probe, deferred to here. It confirms the response-shape assumption that `derive_special()` rests on.
+
+With the site running, this reads the key straight from the database and pipes it into curl, so the credential is never printed:
+
+```bash
+MYSQL="$HOME/Library/Application Support/Local/lightning-services/mysql-8.0.35+4/bin/darwin-arm64/bin/mysql"
+KEY=$("$MYSQL" -u root -proot -S <LOCAL_SOCKET> local -N -B -e \
+  "SELECT option_value FROM wp_options WHERE option_name IN ('gbp_sync_places_api_key','gbp_sync_maps_embed_key') AND option_value <> '' LIMIT 1")
+curl -s "https://places.googleapis.com/v1/places/ChIJ3SkANWLByIARHQ9fYyIpfBU" \
+  -H "X-Goog-Api-Key: $KEY" \
+  -H "X-Goog-FieldMask: regularOpeningHours,currentOpeningHours,businessStatus" \
+  | python3 -m json.tool
+```
+
+Find `<LOCAL_SOCKET>` with `ls ~/Library/Application\ Support/Local/run/*/mysql/mysqld.sock`.
+
+Check three things in the response:
+
+1. `regularOpeningHours.periods[]` entries have `open.day` (int, 0=Sunday), `open.hour`, `open.minute`, and usually `close.{day,hour,minute}`.
+2. `currentOpeningHours.periods[].open` contains a `date` object with `year`, `month`, `day`.
+3. `businessStatus` is one of `OPERATIONAL`, `CLOSED_TEMPORARILY`, `CLOSED_PERMANENTLY`.
+
+If assumption 2 holds, special hours work as designed. If it does not, the fail-safe guard in `derive_special()` means `loc_special_hours` simply stays empty rather than filling with fabricated closures — regular hours, the snapshot rule and status sync are all unaffected, and special-hours derivation becomes a follow-up fix. Record which case occurred.
+
+If assumption 1 or 3 fails, that is more serious: report it, because regular hours and status mapping both depend on those shapes.
 
 - [ ] **Step 1: Activate and confirm the plugin loads clean**
 
