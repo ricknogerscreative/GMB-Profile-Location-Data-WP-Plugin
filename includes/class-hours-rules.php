@@ -321,4 +321,101 @@ final class GBP_Hours_Rules {
 
 		return array_values( $merged );
 	}
+
+	/**
+	 * Derive dated special-hours rows by diffing current against regular hours.
+	 *
+	 * Places API returns currentOpeningHours for the next seven days with a
+	 * concrete date on each period. Any date whose actual hours differ from the
+	 * regular hours for that weekday is a holiday or short-notice override.
+	 *
+	 * The whole seven-day window is walked rather than only the dates present in
+	 * $current_periods, so a day Google omits registers as a closure instead of
+	 * silently disappearing.
+	 *
+	 * @param array  $regular         Canonical regular-hours rows.
+	 * @param array  $current_periods Raw currentOpeningHours.periods.
+	 * @param string $today           Y-m-d for the first day of the window.
+	 */
+	public static function derive_special( array $regular, array $current_periods, string $today ): array {
+		// Regular hours as comparable tokens, keyed by weekday label.
+		$expected_by_day = [];
+		foreach ( $regular as $row ) {
+			$label = (string) ( $row['day'] ?? '' );
+			if ( '' === $label ) {
+				continue;
+			}
+			$expected_by_day[ $label ][] = ! empty( $row['is_closed'] )
+				? 'CLOSED'
+				: $row['open_time'] . '|' . $row['close_time'];
+		}
+
+		// Actual hours as the same tokens, keyed by concrete date.
+		$actual_by_date = [];
+		foreach ( $current_periods as $period ) {
+			$date = self::period_date( $period['open'] ?? [] );
+			if ( null === $date ) {
+				continue;
+			}
+
+			$open = self::fmt_clock(
+				(int) ( $period['open']['hour'] ?? 0 ),
+				(int) ( $period['open']['minute'] ?? 0 )
+			);
+
+			$close = isset( $period['close'] )
+				? self::fmt_clock( (int) ( $period['close']['hour'] ?? 0 ), (int) ( $period['close']['minute'] ?? 0 ) )
+				: self::fmt_clock( 23, 59 );
+
+			$actual_by_date[ $date ][] = $open . '|' . $close;
+		}
+
+		// Fail-safe. Google gave us periods but none carried a date, so the
+		// date-shape assumption this function rests on is wrong. Every day would
+		// otherwise read as closed and we would write a week of closures that do
+		// not exist. Emit nothing instead.
+		if ( ! empty( $current_periods ) && empty( $actual_by_date ) ) {
+			return [];
+		}
+
+		$rows = [];
+
+		for ( $offset = 0; $offset < 7; $offset++ ) {
+			$date  = date( 'Y-m-d', strtotime( $today . ' +' . $offset . ' day' ) );
+			$label = self::DAYS[ (int) date( 'N', strtotime( $date ) ) - 1 ];
+
+			$actual   = $actual_by_date[ $date ] ?? [ 'CLOSED' ];
+			$expected = $expected_by_day[ $label ] ?? [ 'CLOSED' ];
+
+			sort( $actual );
+			sort( $expected );
+
+			if ( $actual === $expected ) {
+				continue; // Matches the regular week — not a special day.
+			}
+
+			if ( [ 'CLOSED' ] === $actual ) {
+				$rows[] = [ 'date' => $date, 'is_closed' => 1, 'open_time' => '', 'close_time' => '' ];
+				continue;
+			}
+
+			foreach ( $actual as $token ) {
+				[ $open, $close ] = explode( '|', $token );
+				$rows[] = [ 'date' => $date, 'is_closed' => 0, 'open_time' => $open, 'close_time' => $close ];
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Extract Y-m-d from a Places period's open.date object, or null.
+	 */
+	private static function period_date( array $open ): ?string {
+		$date = $open['date'] ?? null;
+		if ( ! is_array( $date ) || ! isset( $date['year'], $date['month'], $date['day'] ) ) {
+			return null;
+		}
+		return sprintf( '%04d-%02d-%02d', (int) $date['year'], (int) $date['month'], (int) $date['day'] );
+	}
 }
