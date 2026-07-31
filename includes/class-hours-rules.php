@@ -107,6 +107,132 @@ final class GBP_Hours_Rules {
 	}
 
 	/**
+	 * Convert a SerpAPI hours payload to canonical rows, or null.
+	 *
+	 * SerpAPI is a scrape of the public Maps panel and returns hours in several
+	 * shapes, sometimes partially. Anything short of a complete, fully parseable
+	 * seven-day week is rejected: writing a partial result would mark the
+	 * unseen days closed, which is how correct hours were previously destroyed.
+	 *
+	 * @param mixed $raw Whatever sat under the response's hours key.
+	 */
+	public static function canonicalize_serp( $raw ): ?array {
+		$by_day = self::flatten_serp( $raw );
+		if ( null === $by_day ) {
+			return null;
+		}
+
+		$rows = [];
+		foreach ( self::DAYS as $label ) {
+			if ( ! array_key_exists( $label, $by_day ) ) {
+				return null; // Incomplete scrape.
+			}
+
+			$range = (string) $by_day[ $label ];
+
+			if ( '' === $range || false !== stripos( $range, 'closed' ) ) {
+				$rows[] = [ 'day' => $label, 'open_time' => '', 'close_time' => '', 'is_closed' => 1 ];
+				continue;
+			}
+
+			[ $open, $close ] = self::split_time_range( $range );
+			if ( '' === $open || '' === $close ) {
+				return null; // Unparseable range — reject rather than write half a row.
+			}
+
+			$rows[] = [ 'day' => $label, 'open_time' => $open, 'close_time' => $close, 'is_closed' => 0 ];
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Reduce any of SerpAPI's hours shapes to [ DAY_LABEL => range string ].
+	 */
+	private static function flatten_serp( $raw ): ?array {
+		if ( ! is_array( $raw ) || empty( $raw ) ) {
+			return null;
+		}
+
+		// Shape: { timetable: { monday: … } }
+		if ( isset( $raw['timetable'] ) && is_array( $raw['timetable'] ) ) {
+			return self::flatten_day_map( $raw['timetable'] );
+		}
+
+		// Shape: { monday: …, tuesday: … }
+		$lower = array_change_key_case( $raw, CASE_LOWER );
+		if ( isset( $lower['monday'] ) || isset( $lower['sunday'] ) ) {
+			return self::flatten_day_map( $raw );
+		}
+
+		$first = reset( $raw );
+
+		// Shape: [ { sunday: "9 AM–9 PM" }, { monday: "10 AM–8 PM" }, … ]
+		if ( is_array( $first ) ) {
+			$merged = [];
+			foreach ( $raw as $item ) {
+				if ( ! is_array( $item ) ) {
+					continue;
+				}
+				foreach ( $item as $day => $range ) {
+					$merged[ $day ] = $range;
+				}
+			}
+			return $merged ? self::flatten_day_map( $merged ) : null;
+		}
+
+		// Shape: [ "Monday: 8:00 AM–6:00 PM", … ]
+		if ( is_string( $first ) ) {
+			$merged = [];
+			foreach ( $raw as $line ) {
+				if ( is_string( $line ) && preg_match( '/^\s*(\w+)\s*:\s*(.+)$/u', $line, $m ) ) {
+					$merged[ $m[1] ] = trim( $m[2] );
+				}
+			}
+			return $merged ? self::flatten_day_map( $merged ) : null;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Normalize day keys to canonical labels and reduce each value to a single
+	 * range string. Values arrive as a string, an array of strings, or an array
+	 * of {open,close} objects.
+	 */
+	private static function flatten_day_map( array $map ): ?array {
+		$out = [];
+
+		foreach ( $map as $day => $value ) {
+			$label = strtoupper( trim( (string) $day ) );
+			if ( ! in_array( $label, self::DAYS, true ) ) {
+				continue;
+			}
+
+			if ( is_string( $value ) ) {
+				$out[ $label ] = $value;
+				continue;
+			}
+
+			if ( ! is_array( $value ) || empty( $value ) ) {
+				continue;
+			}
+
+			$first = reset( $value );
+
+			if ( is_string( $first ) ) {
+				$out[ $label ] = $first;
+			} elseif ( is_array( $first ) ) {
+				$open  = (string) ( $first['open'] ?? $first['opens'] ?? '' );
+				$close = (string) ( $first['close'] ?? $first['closes'] ?? '' );
+				$out[ $label ] = ( '' !== $open && '' !== $close ) ? $open . ' - ' . $close : 'Closed';
+			}
+		}
+
+		return $out ?: null;
+	}
+
+	/**
 	 * Expand a [ DAY => [ {open,close}, … ] ] map into canonical rows in fixed
 	 * Monday-first order, emitting a closed row for any day with no periods.
 	 */
