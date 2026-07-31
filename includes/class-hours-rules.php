@@ -13,6 +13,13 @@ final class GBP_Hours_Rules {
 	/** Canonical day order — Monday first. */
 	public const DAYS = [ 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY' ];
 
+	/** decide() outcomes. */
+	public const POPULATE  = 'populate';
+	public const ADOPT     = 'adopt';
+	public const WRITE     = 'write';
+	public const UNCHANGED = 'unchanged';
+	public const SKIP      = 'skip';
+
 	/**
 	 * Unicode spaces Google emits inside time strings. PCRE's \s does not match
 	 * these even with /u unless PCRE_UCP is on, so they are listed explicitly.
@@ -253,5 +260,35 @@ final class GBP_Hours_Rules {
 			}
 		}
 		return $rows;
+	}
+
+	/**
+	 * Resolve manual edits against a Google-side change.
+	 *
+	 * The snapshot holds whatever Google last returned. Comparing a new fetch
+	 * against it — rather than against what is currently in the field — is what
+	 * lets a hand-edited value survive indefinitely while Google is unchanged,
+	 * and still be overwritten the moment Google genuinely moves.
+	 *
+	 * A null fetch means the request failed or the result was rejected, and can
+	 * never write. An empty array is a valid result: a normal week derives no
+	 * special hours at all.
+	 *
+	 * @param ?array $fetched          Canonical rows from Google, or null on failure.
+	 * @param ?array $snapshot         What Google returned last time, or null if never.
+	 * @param bool   $current_is_empty Whether the target field is currently empty.
+	 */
+	public static function decide( ?array $fetched, ?array $snapshot, bool $current_is_empty ): string {
+		if ( null === $fetched ) {
+			return self::SKIP;
+		}
+
+		if ( null === $snapshot ) {
+			// First successful fetch. If someone already filled the field in by
+			// hand, adopt their value as the baseline instead of clobbering it.
+			return $current_is_empty ? self::POPULATE : self::ADOPT;
+		}
+
+		return $fetched === $snapshot ? self::UNCHANGED : self::WRITE;
 	}
 }
