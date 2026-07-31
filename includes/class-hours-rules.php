@@ -291,4 +291,34 @@ final class GBP_Hours_Rules {
 
 		return $fetched === $snapshot ? self::UNCHANGED : self::WRITE;
 	}
+
+	/**
+	 * Fold derived special hours into the existing set, scoped to a date window.
+	 *
+	 * Rows dated beyond window_end are hand-entered future closures and are kept
+	 * verbatim. Everything at or before it is dropped — either it is in the past,
+	 * or it sits inside the window the derived rows now own. Scoping by date is
+	 * what removes the need for a "source" sub-field on the repeater.
+	 *
+	 * All dates are Y-m-d, so plain string comparison orders them correctly.
+	 */
+	public static function merge_special_window( array $existing, array $derived, string $window_end ): array {
+		$kept = [];
+
+		foreach ( $existing as $row ) {
+			$date = (string) ( $row['date'] ?? '' );
+
+			if ( '' === $date || $date <= $window_end ) {
+				// Malformed, past, or inside the derived window.
+				continue;
+			}
+
+			$kept[] = $row;
+		}
+
+		$merged = array_merge( $kept, $derived );
+		usort( $merged, static fn( $a, $b ) => strcmp( (string) ( $a['date'] ?? '' ), (string) ( $b['date'] ?? '' ) ) );
+
+		return array_values( $merged );
+	}
 }
