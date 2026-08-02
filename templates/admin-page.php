@@ -7,8 +7,11 @@
 		<span class="gbp-status <?php echo $connected ? 'connected' : 'disconnected'; ?>">
 			<?php echo $connected ? '● SerpAPI Connected' : '● SerpAPI Not Configured'; ?>
 		</span>
-		<span class="gbp-last-run">Last sync: <strong><?php echo esc_html( $last_run ); ?></strong></span>
-		<span class="gbp-next-run">Next sync: <strong><?php echo esc_html( GBP_Cron::get_next_run() ); ?></strong></span>
+		<span class="gbp-status <?php echo $hours_ready ? 'connected' : 'disconnected'; ?>">
+			<?php echo $hours_ready ? '● Places API Connected' : '● Places API Not Configured'; ?>
+		</span>
+		<span class="gbp-last-run">Last full sync: <strong><?php echo esc_html( $last_run ); ?></strong></span>
+		<span class="gbp-last-run">Last hours sync: <strong><?php echo esc_html( $hours_run ); ?></strong></span>
 	</div>
 
 	<div class="gbp-sync-tabs">
@@ -32,34 +35,8 @@
 								class="regular-text" autocomplete="off">
 							<p class="description">
 								<a href="https://serpapi.com/manage-api-key" target="_blank">serpapi.com/manage-api-key</a>
-								— 1 credit per location per sync cycle (23 locations = 23 credits).
+								— used by <strong>Full Sync</strong> only, 1 credit per location. Hours come from the Places API.
 							</p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="gbp_sync_frequency">Sync Frequency</label></th>
-						<td>
-							<select id="gbp_sync_frequency" name="gbp_sync_frequency">
-								<?php
-								$freq    = get_option( 'gbp_sync_frequency', 'gbp_6hr' );
-								$options = [
-									'gbp_15min' => 'Every 15 minutes',
-									'gbp_30min' => 'Every 30 minutes',
-									'gbp_1hr'   => 'Every hour',
-									'gbp_6hr'   => 'Every 6 hours (recommended)',
-									'gbp_12hr'  => 'Every 12 hours',
-									'daily'     => 'Once daily',
-								];
-								foreach ( $options as $value => $label ) {
-									printf( '<option value="%s" %s>%s</option>',
-										esc_attr( $value ),
-										selected( $freq, $value, false ),
-										esc_html( $label )
-									);
-								}
-								?>
-							</select>
-							<p class="description">At 6hr: ~2,760 credits/month for 23 locations. At 1hr: ~16,560 credits/month.</p>
 						</td>
 					</tr>
 					<tr>
@@ -75,13 +52,13 @@
 						</td>
 					</tr>
 						<tr>
-						<th><label for="gbp_sync_places_api_key">Places API Key <span style="font-weight:normal;color:#666">(hours fallback)</span></label></th>
+						<th><label for="gbp_sync_places_api_key">Places API Key <span style="font-weight:normal;color:#666">(primary hours source)</span></label></th>
 						<td>
 							<input type="password" id="gbp_sync_places_api_key" name="gbp_sync_places_api_key"
 								value="<?php echo esc_attr( get_option( 'gbp_sync_places_api_key', '' ) ); ?>"
 								class="regular-text" autocomplete="off">
 							<p class="description">
-								When SerpAPI returns no hours (GBP hours not on public Maps), the sync queries the authoritative <strong>Places API (New)</strong> for this place_id.
+								<strong>Required for hours.</strong> Hours, holiday overrides and open/closed status all read from <strong>Places API (New)</strong>.
 								Google Cloud Console &rarr; enable "Places API (New)" + billing on the same project. Leave blank to reuse the Maps Embed key above.
 							</p>
 						</td>
@@ -113,15 +90,21 @@
 			<h2>Locations</h2>
 
 			<div class="gbp-sync-actions">
-				<button id="gbp-sync-all-btn" class="button button-primary" <?php echo ! $connected ? 'disabled' : ''; ?>>
-					Sync All Locations Now
+				<button id="gbp-sync-hours-btn" class="button button-primary" <?php echo ! $hours_ready ? 'disabled' : ''; ?>>
+					Sync Hours (All)
 				</button>
-				<button id="gbp-sync-missing-hours-btn" class="button" <?php echo ! $connected ? 'disabled' : ''; ?>>
-					Re-sync Missing Hours
+				<button id="gbp-sync-all-btn" class="button" <?php echo ! $connected ? 'disabled' : ''; ?>>
+					Full Sync (All)
 				</button>
 				<span id="gbp-sync-spinner" class="spinner"></span>
 				<div id="gbp-sync-result"></div>
 			</div>
+
+			<p class="description" style="margin-bottom:12px">
+				<strong>Sync Hours</strong> reads hours, holiday overrides and open/closed status from the Places API — no SerpAPI credits.
+				<strong>Full Sync</strong> additionally refreshes name, address, phone, rating and review count via SerpAPI.
+				Hand-edited hours are kept until Google's own hours change.
+			</p>
 
 			<p class="description" style="margin-bottom:12px">
 				Only locations with a <strong>Google Place ID</strong> set will sync.
@@ -134,6 +117,7 @@
 						<th>Location</th>
 						<th>Place ID</th>
 						<th>Status</th>
+						<th>Hours</th>
 						<th>Rating</th>
 						<th>Last Synced</th>
 						<th>Actions</th>
@@ -150,7 +134,7 @@
 
 				if ( empty( $locations ) ) :
 				?>
-					<tr><td colspan="6">No location posts found.</td></tr>
+					<tr><td colspan="7">No location posts found.</td></tr>
 				<?php else : ?>
 					<?php foreach ( $locations as $loc_post ) :
 						$place_id    = get_field( 'loc_place_id',    $loc_post->ID );
@@ -158,6 +142,7 @@
 						$status      = get_field( 'loc_status',       $loc_post->ID );
 						$rating      = get_field( 'loc_rating',       $loc_post->ID );
 						$last_synced = get_field( 'gbp_last_synced',  $loc_post->ID );
+						$hours_state = GBP_Hours_Sync::staleness( $loc_post->ID );
 					?>
 					<tr>
 						<td>
@@ -179,6 +164,19 @@
 								<span class="gbp-badge gbp-badge-error">Perm Closed</span>
 							<?php else : ?>
 								<span class="gbp-badge gbp-badge-success">Open</span>
+							<?php endif; ?>
+						</td>
+						<td>
+							<?php if ( $hours_state['stale'] ) : ?>
+								<span style="color:#d63638">⚠ <?php echo esc_html( $hours_state['label'] ); ?></span>
+							<?php else : ?>
+								<?php echo esc_html( $hours_state['label'] ); ?>
+							<?php endif; ?>
+							<?php if ( $hours_state['source'] ) : ?>
+								<br><span class="description"><?php echo esc_html( $hours_state['source'] ); ?></span>
+							<?php endif; ?>
+							<?php if ( $hours_state['error'] ) : ?>
+								<br><span class="description" style="color:#d63638" title="<?php echo esc_attr( $hours_state['error'] ); ?>">sync error</span>
 							<?php endif; ?>
 						</td>
 						<td><?php echo $rating ? '★ ' . esc_html( $rating ) : '—'; ?></td>

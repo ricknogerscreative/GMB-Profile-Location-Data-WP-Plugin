@@ -56,46 +56,54 @@
         });
     });
 
-    // Re-sync only locations missing hours.
-    $('#gbp-sync-missing-hours-btn').on('click', function () {
+    // Render the per-location breakdown returned by the hours sync.
+    function renderHoursResult(d) {
+        var counts = [
+            'Checked: <strong>' + d.checked + '</strong>',
+            'Updated from Google: <strong>' + d.written + '</strong>',
+            'First populated: <strong>' + d.populated + '</strong>',
+            'Manual entries kept: <strong>' + (d.adopted + d.unchanged) + '</strong>'
+        ];
+        if (d.skipped) {
+            counts.push('No hours: <strong>' + d.skipped + '</strong>');
+        }
+
+        var detail = '';
+        var problems = (d.locations || []).filter(function (l) {
+            return l.hours === 'error' || l.hours === 'skip';
+        });
+
+        if (problems.length) {
+            detail = '<p style="margin:6px 0 0">Locations with no hours:</p><ul style="margin:4px 0 0 16px">' +
+                problems.map(function (l) {
+                    return '<li><strong>' + l.title + '</strong> — ' + (l.error || 'no usable hours returned') + '</li>';
+                }).join('') + '</ul>';
+        }
+
+        return '<div class="notice notice-' + (problems.length ? 'warning' : 'success') + ' inline"><p>' +
+            counts.join(' | ') + '</p>' + detail + '</div>';
+    }
+
+    // Sync hours for every location — Places API only.
+    $('#gbp-sync-hours-btn').on('click', function () {
         var $btn     = $(this);
         var $spinner = $('#gbp-sync-spinner');
         var $result  = $('#gbp-sync-result');
 
         $btn.prop('disabled', true);
         $spinner.addClass('is-active');
-        $result.html('<p>Re-scraping locations with no hours — this can take a while (each retries up to 3×).</p>');
+        $result.html('<p>Reading hours from the Places API…</p>');
 
         $.post(gbpSync.ajaxUrl, {
-            action: 'gbp_sync_missing_hours',
+            action: 'gbp_sync_hours_all',
             nonce:  gbpSync.nonce,
         })
         .done(function (res) {
             if (res.success) {
-                var d = res.data;
-                var stillHtml = '';
-                if (d.still_missing && d.still_missing.length) {
-                    stillHtml = '<p style="margin:6px 0 0">Still no hours (likely none set in Google Business Profile):</p>' +
-                        '<ul style="margin:4px 0 0 16px">' +
-                        d.still_missing.map(function(t){ return '<li>' + t + '</li>'; }).join('') +
-                        '</ul>';
-                }
-                var errHtml = '';
-                if (d.errors && d.errors.length) {
-                    errHtml = '<ul style="margin:4px 0 0 16px">' +
-                        d.errors.map(function(e){ return '<li>' + e + '</li>'; }).join('') +
-                        '</ul>';
-                }
-                var noticeType = (d.errors.length || (d.still_missing && d.still_missing.length)) ? 'warning' : 'success';
-                $result.html(
-                    '<div class="notice notice-' + noticeType + ' inline"><p>' +
-                    'Checked: <strong>' + d.checked + '</strong> | Recovered hours: <strong>' + d.recovered + '</strong>' +
-                    (d.errors.length ? ' | Errors: <strong>' + d.errors.length + '</strong>' : '') +
-                    '</p>' + stillHtml + errHtml + '</div>'
-                );
+                $result.html(renderHoursResult(res.data));
                 setTimeout(function () { location.reload(); }, 2500);
             } else {
-                $result.html('<div class="notice notice-error inline"><p>Re-sync failed: ' + (res.data || 'Unknown error') + '</p></div>');
+                $result.html('<div class="notice notice-error inline"><p>Hours sync failed: ' + (res.data || 'Unknown error') + '</p></div>');
             }
         })
         .fail(function () {
