@@ -2,6 +2,11 @@
 (function ($) {
     'use strict';
 
+    // Escape a value for safe interpolation into concatenated HTML.
+    function esc( value ) {
+        return $( '<div>' ).text( value == null ? '' : value ).html();
+    }
+
     // Tab navigation.
     $('.gbp-tab-nav a').on('click', function (e) {
         e.preventDefault();
@@ -76,7 +81,7 @@
         if (problems.length) {
             detail = '<p style="margin:6px 0 0">Locations with no hours:</p><ul style="margin:4px 0 0 16px">' +
                 problems.map(function (l) {
-                    return '<li><strong>' + l.title + '</strong> — ' + (l.error || 'no usable hours returned') + '</li>';
+                    return '<li><strong>' + esc(l.title) + '</strong> — ' + esc(l.error || 'no usable hours returned') + '</li>';
                 }).join('') + '</ul>';
         }
 
