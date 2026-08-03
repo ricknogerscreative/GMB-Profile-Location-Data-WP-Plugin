@@ -51,7 +51,7 @@
 							</p>
 						</td>
 					</tr>
-						<tr>
+					<tr>
 						<th><label for="gbp_sync_places_api_key">Places API Key <span style="font-weight:normal;color:#666">(primary hours source)</span></label></th>
 						<td>
 							<input type="password" id="gbp_sync_places_api_key" name="gbp_sync_places_api_key"
@@ -63,7 +63,7 @@
 							</p>
 						</td>
 					</tr>
-						<tr>
+					<tr>
 						<th><label for="gbp_sync_brand_prefix">Brand Name Prefix</label></th>
 						<td>
 							<input type="text" id="gbp_sync_brand_prefix" name="gbp_sync_brand_prefix"

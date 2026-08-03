@@ -23,8 +23,7 @@ class GBP_Admin {
 		add_action( 'admin_init',            [ $this, 'register_settings' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'wp_ajax_gbp_sync_all',          [ $this, 'ajax_sync_all' ] );
-		add_action( 'wp_ajax_gbp_sync_hours_all', [ $this, 'ajax_sync_hours_all' ] );
-		add_action( 'wp_ajax_gbp_sync_hours_one', [ $this, 'ajax_sync_hours_one' ] );
+		add_action( 'wp_ajax_gbp_sync_hours_all',    [ $this, 'ajax_sync_hours_all' ] );
 		add_action( 'wp_ajax_gbp_sync_one',          [ $this, 'ajax_sync_one' ] );
 		add_action( 'wp_ajax_gbp_search_locations',  [ $this, 'ajax_search_locations' ] );
 		add_action( 'wp_ajax_gbp_import_location',   [ $this, 'ajax_import_location' ] );
@@ -91,20 +90,6 @@ class GBP_Admin {
 		wp_send_json_success( $sync->sync_all() );
 	}
 
-	public function ajax_sync_hours_one(): void {
-		check_ajax_referer( self::NONCE, 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Unauthorized', 403 );
-		}
-
-		$post_id = (int) ( $_POST['post_id'] ?? 0 );
-		if ( ! $post_id ) {
-			wp_send_json_error( 'Missing post_id' );
-		}
-
-		wp_send_json_success( ( new GBP_Hours_Sync() )->sync_location( $post_id ) );
-	}
-
 	public function ajax_sync_one(): void {
 		check_ajax_referer( self::NONCE, 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -114,6 +99,11 @@ class GBP_Admin {
 		$post_id = (int) ( $_POST['post_id'] ?? 0 );
 		if ( ! $post_id ) {
 			wp_send_json_error( 'Missing post_id' );
+		}
+
+		// The sync writes ACF location fields, so refuse anything that is not one.
+		if ( GBP_SYNC_POST_TYPE !== get_post_type( $post_id ) ) {
+			wp_send_json_error( 'Post ' . $post_id . ' is not a location.' );
 		}
 
 		$results = ( new GBP_Serp_Sync() )->sync_single( $post_id );
@@ -179,12 +169,12 @@ class GBP_Admin {
 	// -------------------------------------------------------------------------
 
 	public function render_page(): void {
-		$serp       = new GBP_Serp_Sync();
-		$connected  = $serp->is_configured();
-		$hours_sync = new GBP_Hours_Sync();
+		$serp        = new GBP_Serp_Sync();
+		$connected   = $serp->is_configured();
+		$hours_sync  = new GBP_Hours_Sync();
 		$hours_ready = $hours_sync->is_configured();
-		$last_run   = get_option( 'gbp_sync_last_run', 'Never' );
-		$hours_run  = get_option( 'gbp_sync_hours_last_run', 'Never' );
+		$last_run    = get_option( 'gbp_sync_last_run', 'Never' );
+		$hours_run   = get_option( 'gbp_sync_hours_last_run', 'Never' );
 
 		include GBP_SYNC_DIR . 'templates/admin-page.php';
 	}

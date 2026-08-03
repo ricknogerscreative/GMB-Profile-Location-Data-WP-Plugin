@@ -80,6 +80,7 @@
         }
 
         var detail = '';
+        // Mirrors GBP_Hours_Sync::ERROR and GBP_Hours_Rules::SKIP.
         var problems = (d.locations || []).filter(function (l) {
             return l.hours === 'error' || l.hours === 'skip';
         });
@@ -128,17 +129,15 @@
 
     // Sync single location.
     $(document).on('click', '.gbp-sync-one-btn', function () {
-        var $btn         = $(this);
-        var locationName = $btn.data('location');
-        var postId       = $btn.data('post-id');
+        var $btn   = $(this);
+        var postId = $btn.data('post-id');
 
         $btn.prop('disabled', true).text('Syncing…');
 
         $.post(gbpSync.ajaxUrl, {
-            action:        'gbp_sync_one',
-            nonce:         gbpSync.nonce,
-            location_name: locationName,
-            post_id:       postId,
+            action:  'gbp_sync_one',
+            nonce:   gbpSync.nonce,
+            post_id: postId,
         })
         .done(function (res) {
             if (res.success) {

@@ -13,6 +13,13 @@ class GBP_Hours_Sync {
 	private const PLACES_URL = 'https://places.googleapis.com/v1/places/';
 	private const FIELD_MASK = 'regularOpeningHours,currentOpeningHours,businessStatus';
 
+	/**
+	 * Result marker for a location that failed before any decision was reached.
+	 * Sits alongside the GBP_Hours_Rules::decide() outcomes in $result['hours'],
+	 * so assets/js/admin.js matches on this same string.
+	 */
+	public const ERROR = 'error';
+
 	/** Hours older than this are flagged in the admin list. */
 	public const STALE_AFTER = 7 * DAY_IN_SECONDS;
 
@@ -42,10 +49,15 @@ class GBP_Hours_Sync {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Run the hours sync across every location that has a Place ID.
+	 * Run the hours sync across every location.
 	 *
 	 * Places API only — no SerpAPI fallback. This is the cheap, frequently-run
 	 * action and must not silently spend SerpAPI credits.
+	 *
+	 * Locations with no Place ID are deliberately included rather than filtered
+	 * out in the query: sync_location() reports them as "No Google Place ID set."
+	 * and they are named in the results panel. Excluding them made them vanish
+	 * from the report entirely, which reads as success.
 	 */
 	public function sync_all(): array {
 		$posts = get_posts( [
@@ -53,11 +65,6 @@ class GBP_Hours_Sync {
 			'posts_per_page' => -1,
 			'orderby'        => 'title',
 			'order'          => 'ASC',
-			'meta_query'     => [ [
-				'key'     => 'loc_place_id',
-				'value'   => '',
-				'compare' => '!=',
-			] ],
 		] );
 
 		$agg = [
@@ -135,8 +142,12 @@ class GBP_Hours_Sync {
 		$regular = null;
 
 		if ( null !== $places ) {
-			$this->write_status( $post_id, $places['status'] );
-			$result['status_source'] = 'places';
+			// Only claim the status when something was actually written, or an
+			// absent or unrecognised businessStatus would suppress the SerpAPI
+			// status fallback in GBP_Serp_Sync while leaving the field stale.
+			if ( $this->write_status( $post_id, $places['status'] ) ) {
+				$result['status_source'] = 'places';
+			}
 			$regular = GBP_Hours_Rules::canonicalize_places( $places['regular_periods'] );
 			if ( null !== $regular ) {
 				$result['source'] = 'places';
@@ -264,8 +275,10 @@ class GBP_Hours_Sync {
 	 *
 	 * CLOSED_PERMANENTLY deliberately does not unpublish the post — taking a
 	 * live location page down is a decision for a human.
+	 *
+	 * @return bool Whether a status was actually written.
 	 */
-	private function write_status( int $post_id, string $business_status ): void {
+	private function write_status( int $post_id, string $business_status ): bool {
 		$map = [
 			'OPERATIONAL'        => [ 'OPEN', 0 ],
 			'CLOSED_TEMPORARILY' => [ 'CLOSED_TEMPORARILY', 1 ],
@@ -273,12 +286,14 @@ class GBP_Hours_Sync {
 		];
 
 		if ( ! isset( $map[ $business_status ] ) ) {
-			return;
+			return false;
 		}
 
 		[ $status, $temp_closed ] = $map[ $business_status ];
 		update_field( 'loc_status', $status, $post_id );
 		update_field( 'loc_temp_closed', $temp_closed, $post_id );
+
+		return true;
 	}
 
 	// -------------------------------------------------------------------------
@@ -334,7 +349,10 @@ class GBP_Hours_Sync {
 
 	private function record_error( int $post_id, array $result ): array {
 		update_post_meta( $post_id, self::META_LAST_ERROR, $result['error'] );
-		$result['hours'] = 'error';
+		// Drop the source too, or the admin column shows a stale "places" badge
+		// next to a live error.
+		delete_post_meta( $post_id, self::META_SOURCE );
+		$result['hours'] = self::ERROR;
 		return $result;
 	}
 }
