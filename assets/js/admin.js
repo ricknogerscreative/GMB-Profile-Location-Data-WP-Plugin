@@ -2,9 +2,15 @@
 (function ($) {
     'use strict';
 
-    // Escape a value for safe interpolation into concatenated HTML.
+    // Escape a value for safe interpolation into concatenated HTML text.
     function esc( value ) {
         return $( '<div>' ).text( value == null ? '' : value ).html();
+    }
+
+    // Escape a value for a double-quoted HTML attribute. esc() leaves quotes
+    // intact, which would close the attribute early.
+    function escAttr( value ) {
+        return esc( value ).replace( /"/g, '&quot;' );
     }
 
     // Tab navigation.
@@ -37,7 +43,7 @@
                 var errHtml = '';
                 if (d.errors && d.errors.length) {
                     errHtml = '<ul style="margin:4px 0 0 16px">' +
-                        d.errors.map(function(e){ return '<li>' + e + '</li>'; }).join('') +
+                        d.errors.map(function(e){ return '<li>' + esc(e) + '</li>'; }).join('') +
                         '</ul>';
                 }
                 $result.html(
@@ -49,7 +55,7 @@
                 // Reload page after short delay to refresh status badges.
                 setTimeout(function () { location.reload(); }, 2000);
             } else {
-                $result.html('<div class="notice notice-error inline"><p>Sync failed: ' + (res.data || 'Unknown error') + '</p></div>');
+                $result.html('<div class="notice notice-error inline"><p>Sync failed: ' + esc(res.data || 'Unknown error') + '</p></div>');
             }
         })
         .fail(function () {
@@ -108,7 +114,7 @@
                 $result.html(renderHoursResult(res.data));
                 setTimeout(function () { location.reload(); }, 2500);
             } else {
-                $result.html('<div class="notice notice-error inline"><p>Hours sync failed: ' + (res.data || 'Unknown error') + '</p></div>');
+                $result.html('<div class="notice notice-error inline"><p>Hours sync failed: ' + esc(res.data || 'Unknown error') + '</p></div>');
             }
         })
         .fail(function () {
@@ -171,7 +177,7 @@
         })
         .done(function (res) {
             if (!res.success) {
-                $results.html('<div class="notice notice-error inline"><p>' + (res.data || 'Search failed.') + '</p></div>');
+                $results.html('<div class="notice notice-error inline"><p>' + esc(res.data || 'Search failed.') + '</p></div>');
                 return;
             }
 
@@ -184,13 +190,13 @@
                         '<th>Name</th><th>Address</th><th>Place ID</th><th>Action</th>' +
                         '</tr></thead><tbody>';
                 d.new.forEach(function (loc) {
-                    html += '<tr id="import-row-' + loc.place_id + '">' +
-                            '<td>' + loc.title + '</td>' +
-                            '<td>' + loc.address + '</td>' +
-                            '<td><code>' + loc.place_id.substring(0, 22) + '…</code></td>' +
+                    html += '<tr id="import-row-' + escAttr(loc.place_id) + '">' +
+                            '<td>' + esc(loc.title) + '</td>' +
+                            '<td>' + esc(loc.address) + '</td>' +
+                            '<td><code>' + esc(loc.place_id.substring(0, 22)) + '…</code></td>' +
                             '<td><button class="button button-primary gbp-import-one-btn"' +
-                            ' data-place-id="' + loc.place_id + '"' +
-                            ' data-title="' + loc.title.replace(/"/g, '&quot;') + '">Import &amp; Sync</button></td>' +
+                            ' data-place-id="' + escAttr(loc.place_id) + '"' +
+                            ' data-title="' + escAttr(loc.title) + '">Import &amp; Sync</button></td>' +
                             '</tr>';
                 });
                 html += '</tbody></table>';
@@ -231,10 +237,10 @@
             var $cell = $('#import-row-' + placeId).find('td:last');
             if (res.success) {
                 var editUrl = res.data.edit_url;
-                $cell.html('<span class="gbp-badge gbp-badge-success">Imported</span> <a href="' + editUrl + '" target="_blank">Edit Post</a>');
+                $cell.html('<span class="gbp-badge gbp-badge-success">Imported</span> <a href="' + escAttr(editUrl) + '" target="_blank">Edit Post</a>');
             } else {
                 $btn.prop('disabled', false).text('Import & Sync');
-                $cell.append('<span style="color:#d63638;margin-left:8px">Error: ' + (res.data || 'Unknown') + '</span>');
+                $cell.append('<span style="color:#d63638;margin-left:8px">Error: ' + esc(res.data || 'Unknown') + '</span>');
             }
         })
         .fail(function () {
