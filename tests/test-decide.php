@@ -47,6 +47,22 @@ describe( 'decide', function () {
 		expect_equals( GBP_Hours_Rules::UNCHANGED, GBP_Hours_Rules::decide( [], [], false ) );
 	} );
 
+	it( 'repopulates when the snapshot matches but the field was emptied', function () {
+		// An operator deleting bad rows must be able to re-sync them. Returning
+		// UNCHANGED here wedges the location at empty hours forever.
+		$rows = decide_rows();
+		expect_equals( GBP_Hours_Rules::POPULATE, GBP_Hours_Rules::decide( $rows, $rows, true ) );
+	} );
+
+	it( 'does not rewrite an empty field when the fetch itself is empty', function () {
+		// Special hours in a normal week: nothing fetched, nothing to write.
+		expect_equals( GBP_Hours_Rules::UNCHANGED, GBP_Hours_Rules::decide( [], [], true ) );
+	} );
+
+	it( 'adopts an empty fetch over a hand-filled field on first sync', function () {
+		expect_equals( GBP_Hours_Rules::ADOPT, GBP_Hours_Rules::decide( [], null, false ) );
+	} );
+
 	it( 'survives a snapshot round-tripped through JSON', function () {
 		$rows     = decide_rows();
 		$snapshot = json_decode( json_encode( $rows ), true );

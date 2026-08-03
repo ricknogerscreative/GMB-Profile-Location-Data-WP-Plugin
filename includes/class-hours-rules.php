@@ -274,6 +274,11 @@ final class GBP_Hours_Rules {
 	 * never write. An empty array is a valid result: a normal week derives no
 	 * special hours at all.
 	 *
+	 * An emptied field always repopulates, even when the snapshot still matches.
+	 * Deleting bad rows and re-syncing is how an operator recovers a location,
+	 * and without this the snapshot would wedge it at empty forever. A fetch that
+	 * is itself empty is exempt — there is nothing to put back.
+	 *
 	 * @param ?array $fetched          Canonical rows from Google, or null on failure.
 	 * @param ?array $snapshot         What Google returned last time, or null if never.
 	 * @param bool   $current_is_empty Whether the target field is currently empty.
@@ -289,7 +294,11 @@ final class GBP_Hours_Rules {
 			return $current_is_empty ? self::POPULATE : self::ADOPT;
 		}
 
-		return $fetched === $snapshot ? self::UNCHANGED : self::WRITE;
+		if ( $fetched === $snapshot ) {
+			return ( $current_is_empty && ! empty( $fetched ) ) ? self::POPULATE : self::UNCHANGED;
+		}
+
+		return self::WRITE;
 	}
 
 	/**
@@ -329,9 +338,14 @@ final class GBP_Hours_Rules {
 	 * concrete date on each period. Any date whose actual hours differ from the
 	 * regular hours for that weekday is a holiday or short-notice override.
 	 *
-	 * The whole seven-day window is walked rather than only the dates present in
-	 * $current_periods, so a day Google omits registers as a closure instead of
-	 * silently disappearing.
+	 * Only dates Google actually answered for are judged. A missing date inside
+	 * the span Google covered is a real closure and is emitted; a missing date
+	 * outside it — or an absent response entirely — is simply unknown and is
+	 * skipped. That distinction matters twice: currentOpeningHours can be absent
+	 * altogether, and it is anchored to the place's local date, which for a
+	 * multi-timezone chain can sit a day off the site's own date and leave an
+	 * edge of this window unanswered. Judging those as CLOSED would write
+	 * closures that do not exist onto a live location page.
 	 *
 	 * @param array  $regular         Canonical regular-hours rows.
 	 * @param array  $current_periods Raw currentOpeningHours.periods.
@@ -370,18 +384,28 @@ final class GBP_Hours_Rules {
 			$actual_by_date[ $date ][] = $open . '|' . $close;
 		}
 
-		// Fail-safe. Google gave us periods but none carried a date, so the
-		// date-shape assumption this function rests on is wrong. Every day would
-		// otherwise read as closed and we would write a week of closures that do
-		// not exist. Emit nothing instead.
-		if ( ! empty( $current_periods ) && empty( $actual_by_date ) ) {
+		// Nothing dated came back: no response, or a response whose shape does not
+		// match the date assumption this function rests on. Either way there is
+		// nothing to judge against, so emit nothing rather than a week of
+		// fabricated closures.
+		$covered = array_keys( $actual_by_date );
+		if ( empty( $covered ) ) {
 			return [];
 		}
+
+		sort( $covered );
+		$from = $covered[0];
+		$to   = end( $covered );
 
 		$rows = [];
 
 		for ( $offset = 0; $offset < 7; $offset++ ) {
-			$date  = date( 'Y-m-d', strtotime( $today . ' +' . $offset . ' day' ) );
+			$date = date( 'Y-m-d', strtotime( $today . ' +' . $offset . ' day' ) );
+
+			if ( ! isset( $actual_by_date[ $date ] ) && ( $date < $from || $date > $to ) ) {
+				continue; // Outside the span Google answered for — unknown, not closed.
+			}
+
 			$label = self::DAYS[ (int) date( 'N', strtotime( $date ) ) - 1 ];
 
 			$actual   = $actual_by_date[ $date ] ?? [ 'CLOSED' ];

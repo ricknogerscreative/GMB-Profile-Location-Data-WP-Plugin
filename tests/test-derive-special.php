@@ -90,6 +90,32 @@ describe( 'derive_special', function () {
 		expect_equals( [], GBP_Hours_Rules::derive_special( regular_all_open(), $dateless, $today ) );
 	} );
 
+	it( 'returns nothing when there are no current periods at all', function () use ( $today ) {
+		// An absent currentOpeningHours must never be read as a week of closures.
+		expect_equals( [], GBP_Hours_Rules::derive_special( regular_all_open(), [], $today ) );
+	} );
+
+	it( 'does not fabricate a closure on an edge day Google never answered for', function () use ( $today ) {
+		// Google anchors currentOpeningHours to the place's local date. When that
+		// is a day behind the site's date the last day of our window is simply
+		// unanswered — not closed.
+		$periods = [];
+		for ( $i = -1; $i < 6; $i++ ) {
+			$date      = date( 'Y-m-d', strtotime( $today . ' ' . $i . ' day' ) );
+			$periods[] = current_period( $date, 8, 0, 18, 0 );
+		}
+		expect_equals( [], GBP_Hours_Rules::derive_special( regular_all_open(), $periods, $today ) );
+	} );
+
+	it( 'still detects a genuine closure inside a fully covered window', function () use ( $today ) {
+		$periods = current_standard_week( $today );
+		array_splice( $periods, 2, 1 ); // Drop Wednesday 2026-11-25 — mid-window.
+		$out = GBP_Hours_Rules::derive_special( regular_all_open(), $periods, $today );
+		expect_equals( 1, count( $out ) );
+		expect_equals( '2026-11-25', $out[0]['date'] );
+		expect_equals( 1, $out[0]['is_closed'] );
+	} );
+
 	it( 'treats a 24-hour period as open until 11:59 PM', function () use ( $today ) {
 		$periods    = current_standard_week( $today );
 		$periods[1] = [
