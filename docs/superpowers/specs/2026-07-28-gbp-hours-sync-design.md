@@ -372,3 +372,33 @@ The repository currently has no test infrastructure — no `composer.json`, no `
 - Automated or scheduled syncing.
 - Reviews content — remains in Airtable, handled by the separate `edoa-review-sync` plugin.
 - Any change to how templates render hours on the front end.
+
+---
+
+## Known limitations and follow-ups
+
+Recorded at merge (branch `gbp-hours-snapshot-sync`, 20 commits, suite 66/66). All three were found by review, adjudicated deliberately, and accepted rather than missed.
+
+### 1. Special-hours closures on the window edges can be missed
+
+`GBP_Hours_Rules::derive_special()` only judges dates Google actually answered for, deriving that span from the dates that carry periods. A genuinely closed day never carries a period, so a closure landing on the **first or last day** of the seven-day window is indistinguishable from "Google did not answer that far" and is skipped.
+
+Accepted because the failure direction is silence rather than fabrication, and because production previously synced **no** special hours at all — the only writer was `GBP_Sync_Manager`, which was never loaded. Mid-window closures are detected correctly.
+
+**Follow-up, after the Task 12 Step 0b probe:** the probe reveals whether `currentOpeningHours` spans exactly seven dated days. If it does, trust the full `today..today+6` range whenever Google answered for most of it. Either way, add tests for a closure on offset 0 and on offset 6.
+
+An earlier version of this function had the opposite bug — it fabricated a full week of closures when `currentOpeningHours` was absent. That is fixed and tested (`tests/test-derive-special.php`). Do not reintroduce blanket "missing means closed" while addressing this limitation.
+
+### 2. The SerpAPI hours fallback becomes unreachable once a snapshot exists
+
+`GBP_Hours_Sync::sync_location()` consults the SerpAPI fallback only when `_gbp_hours_snapshot` is absent. After rollout every location has a snapshot, so a **persistently** broken Places API — revoked key, invalidated Place ID — can no longer fall back.
+
+Accepted because the alternative is worse: Places and SerpAPI canonicalize differently (a split shift yields two rows from Places, one from SerpAPI), so letting both own the snapshot makes an intermittent Places failure look like a real hours change and destroys the hand-entered hours this feature exists to protect.
+
+**Follow-up:** add an admin control to clear `_gbp_hours_snapshot` for a location. Today that requires WP-CLI or SQL. It is also the operator-facing recovery path if a location ever wedges again.
+
+### 3. `Sync Hours (All)` runs 23 sequential requests in one AJAX call
+
+`GBP_Hours_Sync::sync_all()` makes one Places API request per location at a 20-second timeout — a worst case around 460s against a typical 300s `max_execution_time`. Not data-destructive; each location commits independently. But on timeout the admin sees only a generic failure and cannot tell how far it got.
+
+**Follow-up:** batch the run (offset plus continue), or report progress. Deferred because it needs a design pass rather than a patch.
