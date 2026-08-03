@@ -145,8 +145,15 @@ class GBP_Hours_Sync {
 			}
 		}
 
-		// Fall back to the caller's SerpAPI payload only when one was supplied.
-		if ( null === $regular && null !== $serp_hours_raw ) {
+		// Fall back to the caller's SerpAPI payload only on a location that has
+		// never had a snapshot — i.e. to populate hours on first sync, which is
+		// the fallback's actual purpose. Past that point Places owns the snapshot
+		// alone. The two sources canonicalize the same week differently (a split
+		// shift is two rows from Places and one from SerpAPI), so letting both
+		// write it turns a single intermittent Places failure into a snapshot
+		// change, a change into a write, and a write into a destroyed manual edit
+		// — with nothing about Google's hours having moved.
+		if ( null === $regular && null !== $serp_hours_raw && null === $this->read_snapshot( $post_id, self::META_SNAPSHOT ) ) {
 			$regular = GBP_Hours_Rules::canonicalize_serp( $serp_hours_raw );
 			if ( null !== $regular ) {
 				$result['source'] = 'serpapi';
